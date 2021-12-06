@@ -1,0 +1,9 @@
+.vscode/
+temp/
+desktop.ini
+*.lnk
+-*
+@*
+$*
+*.tmp
+*.log
