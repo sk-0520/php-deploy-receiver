@@ -9,6 +9,7 @@ define('SEQUENCE_RECEIVE', 20);
 define('SEQUENCE_PREPARE', 30);
 define('SEQUENCE_UPDATE', 40);
 
+define('ACCESS_TOKEN_LENGTH', 128);
 define('REQUEST_ID', bin2hex(openssl_random_pseudo_bytes(6)));
 
 define('PARAM_SEQ', 'seq');
@@ -71,12 +72,8 @@ function loadRunningFile(string $filePath): ?array
 	return json_decode($content, true);
 }
 
-function isEnabledToken(string $accessToken, string $tokenExpiration, array $runningData): bool
+function isEnabledLifeTime(string $tokenExpiration, array $runningData): bool
 {
-	if ($accessToken != $runningData['ACCESS_TOKEN']) {
-		return false;
-	}
-
 	$timestamp = new DateTime($runningData['TIMESTAMP']);
 	$limitTimestamp = $timestamp->add(new DateInterval($tokenExpiration));
 	$nowTimestamp = new DateTime();
@@ -84,11 +81,35 @@ function isEnabledToken(string $accessToken, string $tokenExpiration, array $run
 	return $nowTimestamp <= $limitTimestamp;
 }
 
+function isEnabledToken(string $accessToken, array $runningData): bool
+{
+	return $accessToken === $runningData['ACCESS_TOKEN'];
+}
+
 function exitApp(int $httpStatusCode)
 {
 	outputLog($httpStatusCode);
 
 	http_response_code($httpStatusCode);
+
+	exit;
+}
+
+function exitAppWithMessage(int $httpStatusCode, ?string $content = null)
+{
+	if (is_null($content)) {
+		outputLog($httpStatusCode);
+	} else {
+		outputLog($httpStatusCode . ': ' . $content);
+	}
+
+	http_response_code($httpStatusCode);
+
+	if (!is_null($content)) {
+		header('Content-Type: text/plain');
+		echo $content;
+	}
+
 	exit;
 }
 
@@ -125,6 +146,10 @@ function sequenceInitialize(array $config)
 
 	//TODO: アクセスキー確認
 
+	//TODO: ログファイル破棄
+
+	outputLog('RE:SEQUENCE_INITIALIZE');
+
 	$recvDirPath = getReceiveDirectoryPath();
 	if (is_dir($recvDirPath)) {
 		removeDirectory($recvDirPath);
@@ -134,7 +159,7 @@ function sequenceInitialize(array $config)
 	$runningFilePath = getRunningFilePath();
 	$runningData = [
 		'TIMESTAMP' => date('c'),
-		//'ACCESS_TOKEN' => bin2hex(openssl_random_pseudo_bytes(64)),
+		//'ACCESS_TOKEN' => bin2hex(openssl_random_pseudo_bytes(ACCESS_TOKEN_LENGTH)),
 		'ACCESS_TOKEN' => 'TEST',
 		'SEQUENCE' => SEQUENCE_INITIALIZE,
 	];
@@ -150,23 +175,19 @@ function sequenceReceive(array $config, array $runningData)
 	outputLog('SEQUENCE_RECEIVE');
 
 	if (!isset($_POST[PARAM_UPLOAD_NUMBER])) {
-		outputLog('ファイル順序未指定');
-		exitApp(400);
+		exitAppWithMessage(500, 'ファイル順序未指定');
 	}
 	$rawNumber = $_POST[PARAM_UPLOAD_NUMBER];
 	if (!preg_match('/^\d+$/', $rawNumber)) {
-		outputLog(PARAM_UPLOAD_NUMBER . " が数値ではない: $rawNumber");
-		exitApp(404);
+		exitAppWithMessage(500, PARAM_UPLOAD_NUMBER . " が数値ではない: $rawNumber");
 	}
 	$number = (int)$rawNumber;
-	if($number < 1) {
-		outputLog(PARAM_UPLOAD_NUMBER . " は1始まり: $number");
-		exitApp(404);
+	if ($number < 1) {
+		exitAppWithMessage(500, PARAM_UPLOAD_NUMBER . " は1始まり: $number");
 	}
 
 	if (!isset($_FILES[PARAM_UPLOAD_FILE])) {
-		outputLog('ファイル未指定');
-		exitApp(400);
+		exitAppWithMessage(500, 'ファイル未指定');
 	}
 
 	$recvDirPath = getReceiveDirectoryPath();
@@ -174,7 +195,6 @@ function sequenceReceive(array $config, array $runningData)
 	$tempFilePath = $_FILES[PARAM_UPLOAD_FILE]['tmp_name'];
 
 	copy($tempFilePath, $recvFilePath);
-
 }
 
 function sequencePrepare(array $config, array $runningData)
@@ -212,16 +232,19 @@ function main()
 
 		try {
 			$runningFilePath = getRunningFilePath();
+			$runningData = loadRunningFile($runningFilePath);
 
 			if ($seq == SEQUENCE_INITIALIZE) {
 				if (file_exists($runningFilePath)) {
-					outputLog('初期化シーケンスだが実行中ファイルが存在する');
-					exitApp(404);
+					$enabledLifeTime = isEnabledLifeTime($config['TOKEN_EXPIRATION'], $runningData);
+					if ($enabledLifeTime) {
+						outputLog('初期化シーケンスだが有効な実行中ファイルが存在する');
+						exitApp(404);
+					}
 				}
 				sequenceInitialize($config);
 			}
 
-			$runningData = loadRunningFile($runningFilePath);
 			if (is_null($runningData)) {
 				exitApp(404);
 			}
@@ -231,7 +254,12 @@ function main()
 				outputLog("トークンヘッダ($authHeader)未設定");
 				exitApp(404);
 			}
-			$enabledToken = isEnabledToken(trim($_SERVER[$authHeader]), $config['TOKEN_EXPIRATION'], $runningData);
+			$enabledLifeTime = isEnabledLifeTime($config['TOKEN_EXPIRATION'], $runningData);
+			if (!$enabledLifeTime) {
+				outputLog('無効な実行中ファイルが存在する');
+				exitApp(404);
+			}
+			$enabledToken = isEnabledToken(trim($_SERVER[$authHeader]), $runningData);
 			if (!$enabledToken) {
 				outputLog("トークン無効($authHeader): $_SERVER[$authHeader]");
 				exitApp(404);
@@ -251,7 +279,7 @@ function main()
 					break;
 
 				default:
-					throw new Exception('謎' . PARAM_SEQ);
+					throw new Exception('謎シーケンス: ' . PARAM_SEQ);
 			}
 		} catch (Exception $ex) {
 			outputLog($ex);
