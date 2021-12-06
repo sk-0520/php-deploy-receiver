@@ -1,0 +1,20 @@
+version: '{build}'
+image: Ubuntu2004
+skip_tags: true
+environment:
+  matrix:
+    - PHP_VER: 7.0
+    - PHP_VER: 7.1
+    - PHP_VER: 7.2
+    - PHP_VER: 7.3
+    - PHP_VER: 7.4
+    - PHP_VER: 8.0
+before_build:
+  - sh: sudo apt --yes install software-properties-common
+  - sh: sudo add-apt-repository ppa:ondrej/php
+  - sh: sudo apt --yes update
+  - sh: sudo apt --yes install php$PHP_VER php$PHP_VER-fpm php$PHP_VER-mysql php$PHP_VER-mbstring php$PHP_VER-zip php$PHP_VER-xml
+  - sh: sudo update-alternatives --set php /usr/bin/php$PHP_VER
+build_script:
+  - sh: php --syntax-check php-deploy-receiver.php
+
