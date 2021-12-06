@@ -1,5 +1,7 @@
 .vscode/
 temp/
+recv/
+expand/
 desktop.ini
 *.lnk
 -*
