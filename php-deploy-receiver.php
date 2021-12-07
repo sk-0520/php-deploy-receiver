@@ -4,10 +4,11 @@ declare(strict_types=1);
 
 require __DIR__ . '/config.php';
 
-define('SEQUENCE_INITIALIZE', 10);
-define('SEQUENCE_RECEIVE', 20);
-define('SEQUENCE_PREPARE', 30);
-define('SEQUENCE_UPDATE', 40);
+define('SEQUENCE_HELLO', 10);
+define('SEQUENCE_INITIALIZE', 20);
+define('SEQUENCE_RECEIVE', 30);
+define('SEQUENCE_PREPARE', 40);
+define('SEQUENCE_UPDATE', 50);
 
 define('ACCESS_TOKEN_LENGTH', 128);
 define('REQUEST_ID', bin2hex(openssl_random_pseudo_bytes(6)));
@@ -140,6 +141,13 @@ function removeDirectory($directoryPath)
 }
 
 // 各シーケンス -------------------------------
+function sequenceHello(array $config)
+{
+	outputLog('SEQUENCE_HELLO');
+
+	exitOutput(200, 'application/json', array());
+}
+
 function sequenceInitialize(array $config)
 {
 	outputLog('SEQUENCE_INITIALIZE');
@@ -225,7 +233,7 @@ function main()
 			exitApp(404);
 		}
 		$seq = (int)$rawSeq;
-		if (!in_array($seq, [SEQUENCE_INITIALIZE, SEQUENCE_RECEIVE, SEQUENCE_PREPARE, SEQUENCE_UPDATE])) {
+		if (!in_array($seq, [SEQUENCE_HELLO, SEQUENCE_INITIALIZE, SEQUENCE_RECEIVE, SEQUENCE_PREPARE, SEQUENCE_UPDATE])) {
 			outputLog(PARAM_SEQ . " が定義済みシーケンス値ではない: $seq");
 			exitApp(404);
 		}
@@ -234,14 +242,18 @@ function main()
 			$runningFilePath = getRunningFilePath();
 			$runningData = loadRunningFile($runningFilePath);
 
-			if ($seq == SEQUENCE_INITIALIZE) {
+			if($seq == SEQUENCE_HELLO) {
 				if (file_exists($runningFilePath)) {
 					$enabledLifeTime = isEnabledLifeTime($config['TOKEN_EXPIRATION'], $runningData);
 					if ($enabledLifeTime) {
-						outputLog('初期化シーケンスだが有効な実行中ファイルが存在する');
+						outputLog('初回シーケンスだが有効な実行中ファイルが存在する');
 						exitApp(404);
 					}
 				}
+				sequenceHello($config);
+			}
+
+			if ($seq == SEQUENCE_INITIALIZE) {
 				sequenceInitialize($config);
 			}
 
