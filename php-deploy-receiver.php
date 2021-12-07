@@ -13,6 +13,7 @@ define('SEQUENCE_UPDATE', 50);
 define('ACCESS_TOKEN_LENGTH', 128);
 define('REQUEST_ID', bin2hex(openssl_random_pseudo_bytes(6)));
 
+define('PARAM_PUBLIC_KEY', 'pub');
 define('PARAM_SEQ', 'seq');
 define('PARAM_UPLOAD_FILE', 'file');
 define('PARAM_UPLOAD_NUMBER', 'number');
@@ -145,7 +146,18 @@ function sequenceHello(array $config)
 {
 	outputLog('SEQUENCE_HELLO');
 
-	exitOutput(200, 'application/json', array());
+	$key_pair = PHP_OS === 'WINNT'
+		? openssl_pkey_new(['config' => 'C:\\Applications\\xampp\\xampp-portable-win32-7.1.1-0-VC14\\xampp\\php\\extras\\openssl\\openssl.cnf'])
+		: openssl_pkey_new()
+	;
+	openssl_pkey_export($key_pair, $self_private_key);
+	$details = openssl_pkey_get_details($key_pair);
+	$self_public_key = $details['key'];
+
+	outputLog($self_private_key);
+	outputLog($self_public_key);
+
+	exitOutput(200, 'application/json', '{}');
 }
 
 function sequenceInitialize(array $config)
@@ -242,7 +254,7 @@ function main()
 			$runningFilePath = getRunningFilePath();
 			$runningData = loadRunningFile($runningFilePath);
 
-			if($seq == SEQUENCE_HELLO) {
+			if ($seq == SEQUENCE_HELLO) {
 				if (file_exists($runningFilePath)) {
 					$enabledLifeTime = isEnabledLifeTime($config['TOKEN_EXPIRATION'], $runningData);
 					if ($enabledLifeTime) {
