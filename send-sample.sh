@@ -1,6 +1,7 @@
 #!/bin/bash -ue
 
 URL=http://localhost/deploy/php-deploy-receiver.php
+#URL=http://peserver.php.xdomain.jp/php-deploy-receiver/php-deploy-receiver.php
 AUTH_HEADER_NAME=DEPLOY
 AUTH_HEADER_VALUE=TEST
 ARCHIVE_FILE_NAME=public_html.zip
@@ -30,18 +31,18 @@ function cleanupDir
 cleanupDir ${LOCAL_TEMP_DIR}
 cleanupDir ${LOCAL_FILES_DIR}
 
-# HELLO!
+echo HELLO!
 
 openssl genrsa 1024 > ${LOCAL_SELF_PRIVATE_KEY}
 openssl rsa -in ${LOCAL_SELF_PRIVATE_KEY} -pubout -out ${LOCAL_SELF_PUBLIC_KEY}
 
 curl -v -X POST -F seq=${SEQUENCE_HELLO} -F pub=@${LOCAL_SELF_PUBLIC_KEY} $URL
 
-# init
+echo init
 
 curl -v -X POST -d seq=${SEQUENCE_INITIALIZE} -H "${AUTH_HEADER_NAME}: ${AUTH_HEADER_VALUE}" $URL
 
-# recv
+echo recv
 
 split --bytes=${SPLIT_SIZE} --numeric-suffixes=1 --suffix-length=8 ${ARCHIVE_FILE_NAME} ${LOCAL_FILES_DIR}/
 INDEX=1
@@ -50,11 +51,11 @@ for PART_FILE in `ls -1 -v ${LOCAL_FILES_DIR}/`; do
 	let INDEX++
 done
 
-# prepare
+echo prepare
 
 HASH=$(sha512sum --binary ${ARCHIVE_FILE_NAME})
 curl -v -X POST -d seq=${SEQUENCE_PREPARE} -d algorithm=SHA512 -d hash=${HASH} -H "${AUTH_HEADER_NAME}: ${AUTH_HEADER_VALUE}" $URL
 
-# update
+echo update
 
 curl -v -X POST -d seq=${SEQUENCE_UPDATE} -H "${AUTH_HEADER_NAME}: ${AUTH_HEADER_VALUE}" $URL

@@ -178,6 +178,26 @@ function cleanupDirectory(string $directoryPath): void
 	mkdir($directoryPath, 0777, true);
 }
 
+function getChildrenFiles(string $directoryPath): array
+{
+	$files = [];
+	$items = scandir($directoryPath);
+	foreach ($items as $item) {
+		if ($item === '.' || $item === '..') {
+			continue;
+		}
+		$path = joinPath($directoryPath, $item);
+
+		if (is_dir($path)) {
+			$files = array_merge($files, getChildrenFiles($path));
+		} else {
+			$files[] = joinPath($directoryPath, $item);
+		}
+	}
+
+	return $files;
+}
+
 //###########################################################################
 // 各シーケンス -------------------------------
 function sequenceHello(array $config)
@@ -299,8 +319,7 @@ function sequencePrepare(array $config, array $runningData)
 	$zip->extractTo($expandDirPath);
 	$zip->close();
 
-	$expandPattern = joinPath($expandDirPath, '{*,.[!.]*,..?*}');
-	$expandFilePaths = glob($expandPattern, GLOB_BRACE);
+	$expandFilePaths = getChildrenFiles($expandDirPath);
 	foreach ($expandFilePaths as $expandFilePath) {
 		outputLog('path: ' . $expandFilePath);
 		outputLog('size: ' . filesize($expandFilePath));
@@ -312,10 +331,10 @@ function sequenceUpdate(array $config, array $runningData)
 	outputLog('SEQUENCE_UPDATE');
 
 	$expandDirPath = getExpandDirectoryPath();
-	$expandPattern = joinPath($expandDirPath, '{*,.[!.]*,..?*}');
+	$expandFilePaths = getChildrenFiles($expandDirPath);
 	$expandFileRelativePaths = array_map(function ($i) use ($expandDirPath) {
 		return mb_substr($i, mb_strlen($expandDirPath) + 1);
-	}, glob($expandPattern, GLOB_BRACE));
+	}, $expandFilePaths);
 
 	//TODO: .htaccess 制御
 
