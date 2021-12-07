@@ -3,6 +3,7 @@ temp/
 recv/
 expand/
 desktop.ini
+local-*
 *.lnk
 -*
 @*

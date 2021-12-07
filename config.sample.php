@@ -11,16 +11,9 @@ function getConfig()
 		'ACCESS_KEY' => '',
 		// トークンの有効期限
 		'TOKEN_EXPIRATION' => 'PT1H',
-		// 暗号化: openssl_encrypt/openssl_decrypt で使用する
-		'CRYPT' => [
-			'ALGORITHM' => 'aes-256-cbc',
-			// ☆暗号キー
-			'KEY' => '',
-			// ☆IV: bin2hex(openssl_random_pseudo_bytes(16)) でつくる
-			'IV' => '',
-			'OPTIONS' => OPENSSL_RAW_DATA,
-		],
-		// ☆アクセストークンヘッダ
-		'AUTH_HEADER' => 'DEPLOY',
+		// ☆アクセストークンヘッダ(HTTP_はApache依存なのに注意)
+		'AUTH_HEADER' => 'HTTP_DEPLOY',
+		// 鍵作成設定: null でいいけど xampp でやる場合なんかは 'config' => 'C:\\xampp\\....openssl\\openssl.cnf' しておくのが無難
+		'OPENSSL' => null,
 	];
 }

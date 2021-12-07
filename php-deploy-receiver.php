@@ -4,6 +4,10 @@ declare(strict_types=1);
 
 require __DIR__ . '/config.php';
 
+define('HTTP_STATUS_NOT_FOUND', 404);
+define('HTTP_STATUS_SERVER_ERROR', 500);
+define('HTTP_STATUS_SERVICE_UNAVAIL', 503);
+
 define('SEQUENCE_HELLO', 10);
 define('SEQUENCE_INITIALIZE', 20);
 define('SEQUENCE_RECEIVE', 30);
@@ -13,11 +17,14 @@ define('SEQUENCE_UPDATE', 50);
 define('ACCESS_TOKEN_LENGTH', 128);
 define('REQUEST_ID', bin2hex(openssl_random_pseudo_bytes(6)));
 
-define('PARAM_PUBLIC_KEY', 'pub');
 define('PARAM_SEQ', 'seq');
+define('PARAM_PUBLIC_KEY', 'pub');
 define('PARAM_UPLOAD_FILE', 'file');
 define('PARAM_UPLOAD_NUMBER', 'number');
+define('PARAM_ALGORITHM', 'algorithm');
+define('PARAM_HASH', 'hash');
 
+//###########################################################################
 // 共通関数 -------------------------------
 function joinPath(string $basePath, string ...$addPaths): string
 {
@@ -45,8 +52,24 @@ function getReceiveDirectoryPath(): string
 	return $path;
 }
 
+function getExpandDirectoryPath(): string
+{
+	$path = joinPath(__DIR__, 'expand');
+	return $path;
+}
+
+function getArchiveFilePath(): string
+{
+	$path = joinPath(getReceiveDirectoryPath(), '0.zip');
+	return $path;
+}
+
 function clearLog()
 {
+	$logFilePath = getLogFilePath();
+	if (file_exists($logFilePath)) {
+		unlink($logFilePath);
+	}
 }
 
 function outputLog($message)
@@ -72,6 +95,12 @@ function loadRunningFile(string $filePath): ?array
 	}
 
 	return json_decode($content, true);
+}
+
+function saveRunningFile(string $runningFilePath, array $runningData)
+{
+	$jsonString = json_encode($runningData);
+	file_put_contents($runningFilePath, $jsonString, LOCK_EX);
 }
 
 function isEnabledLifeTime(string $tokenExpiration, array $runningData): bool
@@ -125,7 +154,7 @@ function exitOutput(int $httpStatusCode, string $contentType, $content)
 	exit;
 }
 
-function removeDirectory($directoryPath)
+function removeDirectory(string $directoryPath): void
 {
 	if (mb_substr($directoryPath, mb_strlen($directoryPath) - 1, 1) != DIRECTORY_SEPARATOR) {
 		$directoryPath .= DIRECTORY_SEPARATOR;
@@ -141,53 +170,71 @@ function removeDirectory($directoryPath)
 	rmdir($directoryPath);
 }
 
+function cleanupDirectory(string $directoryPath): void
+{
+	if (is_dir($directoryPath)) {
+		removeDirectory($directoryPath);
+	}
+	mkdir($directoryPath, 0777, true);
+}
+
+//###########################################################################
 // 各シーケンス -------------------------------
 function sequenceHello(array $config)
 {
 	outputLog('SEQUENCE_HELLO');
 
-	$key_pair = PHP_OS === 'WINNT'
-		? openssl_pkey_new(['config' => 'C:\\Applications\\xampp\\xampp-portable-win32-7.1.1-0-VC14\\xampp\\php\\extras\\openssl\\openssl.cnf'])
-		: openssl_pkey_new()
-	;
+	if (!isset($_FILES[PARAM_PUBLIC_KEY])) {
+		exitApp(HTTP_STATUS_NOT_FOUND);
+	}
+	$client_public_key = file_get_contents($_FILES[PARAM_PUBLIC_KEY]['tmp_name']);
+
+	$key_pair = is_null($config['OPENSSL'])
+		? openssl_pkey_new()
+		: openssl_pkey_new($config['OPENSSL']);
 	openssl_pkey_export($key_pair, $self_private_key);
 	$details = openssl_pkey_get_details($key_pair);
 	$self_public_key = $details['key'];
-
-	outputLog($self_private_key);
-	outputLog($self_public_key);
-
-	exitOutput(200, 'application/json', '{}');
-}
-
-function sequenceInitialize(array $config)
-{
-	outputLog('SEQUENCE_INITIALIZE');
-
-	//TODO: アクセスキー確認
-
-	//TODO: ログファイル破棄
-
-	outputLog('RE:SEQUENCE_INITIALIZE');
-
-	$recvDirPath = getReceiveDirectoryPath();
-	if (is_dir($recvDirPath)) {
-		removeDirectory($recvDirPath);
-	}
-	mkdir($recvDirPath, 0777, true);
 
 	$runningFilePath = getRunningFilePath();
 	$runningData = [
 		'TIMESTAMP' => date('c'),
 		//'ACCESS_TOKEN' => bin2hex(openssl_random_pseudo_bytes(ACCESS_TOKEN_LENGTH)),
 		'ACCESS_TOKEN' => 'TEST',
-		'SEQUENCE' => SEQUENCE_INITIALIZE,
+		'SEQUENCE' => SEQUENCE_HELLO,
+		'KEYS' => [
+			'SELF_PUBLIC' => $self_public_key,
+			'SELF_PRIVATE' => $self_private_key,
+			'CLIENT_PUBLIC' => $client_public_key,
+		],
 	];
+	saveRunningFile($runningFilePath, $runningData);
 
-	$jsonString = json_encode($runningData);
-	file_put_contents($runningFilePath, $jsonString, LOCK_EX);
+	clearLog();
+	outputLog('RE:SEQUENCE_HELLO');
+	outputLog($runningData);
 
-	exitOutput(200, 'application/json', $jsonString);
+	exitOutput(200, 'application/json', json_encode([
+		'token' => $runningData['ACCESS_TOKEN'],
+		'public_key' => $runningData['KEYS']['SELF_PUBLIC'],
+	]));
+}
+
+function sequenceInitialize(array $config, array $runningData)
+{
+	outputLog('SEQUENCE_INITIALIZE');
+
+	//TODO: アクセスキー確認
+
+	$dirs = [
+		getReceiveDirectoryPath(),
+		getExpandDirectoryPath(),
+	];
+	foreach($dirs as $dir) {
+		cleanupDirectory($dir);
+	}
+
+	exitOutput(200, 'text/plain', strval(SEQUENCE_INITIALIZE));
 }
 
 function sequenceReceive(array $config, array $runningData)
@@ -195,24 +242,29 @@ function sequenceReceive(array $config, array $runningData)
 	outputLog('SEQUENCE_RECEIVE');
 
 	if (!isset($_POST[PARAM_UPLOAD_NUMBER])) {
-		exitAppWithMessage(500, 'ファイル順序未指定');
+		exitAppWithMessage(HTTP_STATUS_SERVER_ERROR, 'ファイル順序未指定');
 	}
 	$rawNumber = $_POST[PARAM_UPLOAD_NUMBER];
 	if (!preg_match('/^\d+$/', $rawNumber)) {
-		exitAppWithMessage(500, PARAM_UPLOAD_NUMBER . " が数値ではない: $rawNumber");
+		exitAppWithMessage(HTTP_STATUS_SERVER_ERROR, PARAM_UPLOAD_NUMBER . " が数値ではない: $rawNumber");
 	}
 	$number = (int)$rawNumber;
 	if ($number < 1) {
-		exitAppWithMessage(500, PARAM_UPLOAD_NUMBER . " は1始まり: $number");
+		exitAppWithMessage(HTTP_STATUS_SERVER_ERROR, PARAM_UPLOAD_NUMBER . " は1始まり: $number");
 	}
 
 	if (!isset($_FILES[PARAM_UPLOAD_FILE])) {
-		exitAppWithMessage(500, 'ファイル未指定');
+		exitAppWithMessage(HTTP_STATUS_SERVER_ERROR, 'ファイル未指定');
 	}
 
 	$recvDirPath = getReceiveDirectoryPath();
-	$recvFilePath = joinPath($recvDirPath, "$number.part");
+	$recvFilePath = joinPath($recvDirPath, sprintf('%08d.part', $number));
 	$tempFilePath = $_FILES[PARAM_UPLOAD_FILE]['tmp_name'];
+
+	outputLog('part: ' . $tempFilePath);
+	outputLog('name: ' . $_FILES[PARAM_UPLOAD_FILE]['name']);
+	outputLog('size: ' . $_FILES[PARAM_UPLOAD_FILE]['size']);
+	outputLog('error: ' . $_FILES[PARAM_UPLOAD_FILE]['error']);
 
 	copy($tempFilePath, $recvFilePath);
 }
@@ -220,6 +272,39 @@ function sequenceReceive(array $config, array $runningData)
 function sequencePrepare(array $config, array $runningData)
 {
 	outputLog('SEQUENCE_PREPARE');
+
+	outputLog('受信ファイル結合');
+
+	$recvDirPath = getReceiveDirectoryPath();
+	$pattern = joinPath($recvDirPath, '*.part');
+	$recvFilePaths = glob($pattern);
+
+	$archiveFilePath = getArchiveFilePath();
+	$stream = fopen($archiveFilePath, "wb");
+	foreach ($recvFilePaths as $recvFilePath) {
+		outputLog('part: ' . $recvFilePath);
+		$recvFileData = file_get_contents($recvFilePath);
+		fwrite($stream, $recvFileData);
+	}
+	fclose($stream);
+
+	outputLog('name: ' . $archiveFilePath);
+	outputLog('size: ' . filesize($archiveFilePath));
+
+	outputLog('アーカイブ展開');
+
+	$expandDirPath = getExpandDirectoryPath();
+	$zip = new ZipArchive();
+	$zip->open($archiveFilePath);
+	$zip->extractTo($expandDirPath);
+	$zip->close();
+
+	$expandPattern = joinPath($expandDirPath, '*');
+	$expandFilePaths = glob($expandPattern);
+	foreach ($expandFilePaths as $expandFilePath) {
+		outputLog('path: ' . $expandFilePath);
+		outputLog('size: ' . filesize($expandFilePath));
+	}
 }
 
 function sequenceUpdate(array $config, array $runningData)
@@ -227,6 +312,7 @@ function sequenceUpdate(array $config, array $runningData)
 	outputLog('SEQUENCE_UPDATE');
 }
 
+//###########################################################################
 // こっから動くのだ -------------------------------
 function main()
 {
@@ -236,60 +322,62 @@ function main()
 
 		if (!isset($_POST[PARAM_SEQ])) {
 			outputLog(PARAM_SEQ . ' 未設定');
-			exitApp(404);
+			exitApp(HTTP_STATUS_NOT_FOUND);
 		}
 
 		$rawSeq = $_POST['seq'];
 		if (!preg_match('/^\d+$/', $rawSeq)) {
 			outputLog(PARAM_SEQ . " が数値ではない: $rawSeq");
-			exitApp(404);
+			exitApp(HTTP_STATUS_NOT_FOUND);
 		}
 		$seq = (int)$rawSeq;
 		if (!in_array($seq, [SEQUENCE_HELLO, SEQUENCE_INITIALIZE, SEQUENCE_RECEIVE, SEQUENCE_PREPARE, SEQUENCE_UPDATE])) {
 			outputLog(PARAM_SEQ . " が定義済みシーケンス値ではない: $seq");
-			exitApp(404);
+			exitApp(HTTP_STATUS_NOT_FOUND);
 		}
 
 		try {
 			$runningFilePath = getRunningFilePath();
-			$runningData = loadRunningFile($runningFilePath);
 
 			if ($seq == SEQUENCE_HELLO) {
 				if (file_exists($runningFilePath)) {
-					$enabledLifeTime = isEnabledLifeTime($config['TOKEN_EXPIRATION'], $runningData);
+					$helloRunningData = loadRunningFile($runningFilePath);
+					$enabledLifeTime = isEnabledLifeTime($config['TOKEN_EXPIRATION'], $helloRunningData);
 					if ($enabledLifeTime) {
 						outputLog('初回シーケンスだが有効な実行中ファイルが存在する');
-						exitApp(404);
+						exitApp(HTTP_STATUS_NOT_FOUND);
 					}
 				}
 				sequenceHello($config);
 			}
 
-			if ($seq == SEQUENCE_INITIALIZE) {
-				sequenceInitialize($config);
-			}
+			$runningData = loadRunningFile($runningFilePath);
 
 			if (is_null($runningData)) {
-				exitApp(404);
+				exitApp(HTTP_STATUS_NOT_FOUND);
 			}
 
-			$authHeader = 'HTTP_' . $config['AUTH_HEADER'];
+			$authHeader = $config['AUTH_HEADER'];
 			if (!isset($_SERVER[$authHeader])) {
 				outputLog("トークンヘッダ($authHeader)未設定");
-				exitApp(404);
+				exitApp(HTTP_STATUS_NOT_FOUND);
 			}
 			$enabledLifeTime = isEnabledLifeTime($config['TOKEN_EXPIRATION'], $runningData);
 			if (!$enabledLifeTime) {
 				outputLog('無効な実行中ファイルが存在する');
-				exitApp(404);
+				exitApp(HTTP_STATUS_NOT_FOUND);
 			}
 			$enabledToken = isEnabledToken(trim($_SERVER[$authHeader]), $runningData);
 			if (!$enabledToken) {
 				outputLog("トークン無効($authHeader): $_SERVER[$authHeader]");
-				exitApp(404);
+				exitApp(HTTP_STATUS_NOT_FOUND);
 			}
 
 			switch ($seq) {
+				case SEQUENCE_INITIALIZE:
+					sequenceInitialize($config, $runningData);
+					break;
+
 				case SEQUENCE_RECEIVE:
 					sequenceReceive($config, $runningData);
 					break;
@@ -307,7 +395,7 @@ function main()
 			}
 		} catch (Exception $ex) {
 			outputLog($ex);
-			exitApp(404);
+			exitApp(HTTP_STATUS_NOT_FOUND);
 		}
 	} finally {
 		outputLog('END');
