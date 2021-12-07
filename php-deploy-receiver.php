@@ -230,7 +230,7 @@ function sequenceInitialize(array $config, array $runningData)
 		getReceiveDirectoryPath(),
 		getExpandDirectoryPath(),
 	];
-	foreach($dirs as $dir) {
+	foreach ($dirs as $dir) {
 		cleanupDirectory($dir);
 	}
 
@@ -299,8 +299,8 @@ function sequencePrepare(array $config, array $runningData)
 	$zip->extractTo($expandDirPath);
 	$zip->close();
 
-	$expandPattern = joinPath($expandDirPath, '*');
-	$expandFilePaths = glob($expandPattern);
+	$expandPattern = joinPath($expandDirPath, '{*,.[!.]*,..?*}');
+	$expandFilePaths = glob($expandPattern, GLOB_BRACE);
 	foreach ($expandFilePaths as $expandFilePath) {
 		outputLog('path: ' . $expandFilePath);
 		outputLog('size: ' . filesize($expandFilePath));
@@ -310,6 +310,47 @@ function sequencePrepare(array $config, array $runningData)
 function sequenceUpdate(array $config, array $runningData)
 {
 	outputLog('SEQUENCE_UPDATE');
+
+	$expandDirPath = getExpandDirectoryPath();
+	$expandPattern = joinPath($expandDirPath, '{*,.[!.]*,..?*}');
+	$expandFileRelativePaths = array_map(function ($i) use ($expandDirPath) {
+		return mb_substr($i, mb_strlen($expandDirPath) + 1);
+	}, glob($expandPattern, GLOB_BRACE));
+
+	//TODO: .htaccess 制御
+
+	$skipFiles = [];
+
+	// ファイル置き換え
+	foreach ($expandFileRelativePaths as $expandFileRelativePath) {
+		if ($config['SERVER'] === 'apache') {
+			$fileName = basename($expandFileRelativePath);
+			if ($fileName === '.htaccess') {
+				$skipFiles[] = $expandFileRelativePath;
+				continue;
+			}
+		}
+		$src = joinPath($expandDirPath, $expandFileRelativePath);
+		if (is_dir($src)) {
+			continue;
+		}
+		$dst = joinPath($config['PUBLIC_DIR_PATH'], $expandFileRelativePath);
+		$dir = dirname($dst);
+		if (!is_dir($dir)) {
+			mkdir($dir, 0777, true);
+		}
+		copy($src, $dst);
+	}
+
+	// 退避ファイル補正
+	foreach ($skipFiles as $skipFile) {
+		$src = joinPath($expandDirPath, $skipFile);
+		$dst = joinPath($config['PUBLIC_DIR_PATH'], $skipFile);
+		copy($src, $dst);
+	}
+
+	// 実行ファイル破棄
+	unlink(getRunningFilePath());
 }
 
 //###########################################################################
