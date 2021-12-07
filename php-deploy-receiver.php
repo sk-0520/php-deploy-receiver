@@ -333,6 +333,7 @@ function sequenceUpdate(array $config, array $runningData)
 	$expandDirPath = getExpandDirectoryPath();
 	$expandFilePaths = getChildrenFiles($expandDirPath);
 	$expandFileRelativePaths = array_map(function ($i) use ($expandDirPath) {
+		outputLog('UPDATE: '. $i);
 		return mb_substr($i, mb_strlen($expandDirPath) + 1);
 	}, $expandFilePaths);
 
