@@ -360,6 +360,8 @@ function sequenceReceive(array $config, array $runningData)
 function sequencePrepare(array $config, array $runningData)
 {
 	outputLog('SEQUENCE_PREPARE');
+	
+	//TODO: ハッシュ突合確認
 
 	outputLog('受信ファイル結合');
 
@@ -397,6 +399,8 @@ function sequencePrepare(array $config, array $runningData)
 function sequenceUpdate(array $config, array $runningData)
 {
 	outputLog('SEQUENCE_UPDATE');
+
+	//TODO: もっかいアクセスキーの突合
 
 	$expandDirPath = getExpandDirectoryPath();
 	$expandFilePaths = getChildrenFiles($expandDirPath, true);
