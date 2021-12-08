@@ -14,10 +14,12 @@ define('SEQUENCE_RECEIVE', 30);
 define('SEQUENCE_PREPARE', 40);
 define('SEQUENCE_UPDATE', 50);
 
-define('ACCESS_TOKEN_LENGTH', 128);
+// 長いと暗号化時に死ぬけどチェックしないかんね
+define('ACCESS_TOKEN_LENGTH', 48);
 define('REQUEST_ID', bin2hex(openssl_random_pseudo_bytes(6)));
 
 define('PARAM_SEQ', 'seq');
+define('PARAM_KEY', 'key');
 define('PARAM_PUBLIC_KEY', 'pub');
 define('PARAM_UPLOAD_FILE', 'file');
 define('PARAM_UPLOAD_NUMBER', 'number');
@@ -26,6 +28,16 @@ define('PARAM_HASH', 'hash');
 
 //###########################################################################
 // 共通関数 -------------------------------
+
+/**
+ * ファイルパス結合
+ *
+ * 別リポジトリの PeServer\FileUtility::join が正
+ *
+ * @param string $basePath ベースパス
+ * @param string ...$addPaths 結合するパス
+ * @return string 結合されたファイルパス
+ */
 function joinPath(string $basePath, string ...$addPaths): string
 {
 	$paths = array_merge([$basePath], $addPaths);
@@ -83,7 +95,7 @@ function outputLog($message)
 	}
 
 	$path = getLogFilePath();
-	$logItem = sprintf('%s <%s> %s->%s [%s] (%d) %s', date('c'), REQUEST_ID, $_SERVER['REQUEST_METHOD'], $_SERVER['REQUEST_URI'], $_SERVER['REMOTE_ADDR'], $backtrace['line'], $value);
+	$logItem = sprintf('%s [%s] <%s> %s %s (%d) %s', date('c'), $_SERVER['REMOTE_ADDR'], REQUEST_ID, $_SERVER['REQUEST_METHOD'], $_SERVER['REQUEST_URI'], $backtrace['line'], $value);
 	file_put_contents($path, $logItem . PHP_EOL, FILE_APPEND | LOCK_EX);
 }
 
@@ -196,15 +208,33 @@ function getChildrenFiles(string $directoryPath, bool $recursive): array
 }
 
 /**
+ * なくても動くやん！！
+ *
+ * xampp環境だと openssl.conf が読み込まれていないのでとりま読み込ます。レンタルサーバー環境では問題ないと思うし、二重に処理しても大丈夫でしょ(知らんけど)
+ *
+ * @param array $config
+ */
+function initializeOpenSsl(array $config): void
+{
+	/*
+	$openssl = openssl_pkey_new($config);
+	outputLog($openssl);
+	while (($e = openssl_error_string()) !== false) {
+		outputLog($e);
+	}
+	*/
+}
+
+/**
  * 暗号化。
  *
  * クライアントの公開鍵を使用してクライアントに渡す暗号データを作成する。
  *
  * @return string 暗号化されたbase64文字列
  */
-function encryptPublicKey(string $public_key, string $source): string
+function encryptPublicKey(string $publicKey, string $source): string
 {
-	openssl_public_encrypt($source, $rawData, $public_key);
+	openssl_public_encrypt($source, $rawData, $publicKey);
 	return base64_encode($rawData);
 }
 
@@ -213,11 +243,17 @@ function encryptPublicKey(string $public_key, string $source): string
  *
  * 本モジュールが作成した秘密鍵でクライアントから送られてきた暗号データを復号する。
  *
- * @param string $data 暗号化されたbase64文字列
+ * @param string $base64Value 暗号化されたbase64文字列
+ *
+ * @return string 復号された文字列
  */
-function decryptPrivateKey(string $private_key, string $data): string
+function decryptPrivateKey(string $privateKey, string $base64Value): string
 {
-	throw new Error('not impl');
+	$encValue = base64_decode($base64Value);
+	if (!openssl_private_decrypt($encValue, $rawValue, $privateKey)) {
+		throw new Exception(openssl_error_string());
+	}
+	return $rawValue;
 }
 
 //###########################################################################
@@ -229,25 +265,23 @@ function sequenceHello(array $config)
 	if (!isset($_FILES[PARAM_PUBLIC_KEY])) {
 		exitApp(HTTP_STATUS_NOT_FOUND);
 	}
-	$client_public_key = file_get_contents($_FILES[PARAM_PUBLIC_KEY]['tmp_name']);
+	$clientPublicKey = file_get_contents($_FILES[PARAM_PUBLIC_KEY]['tmp_name']);
 
-	$key_pair = is_null($config['OPENSSL'])
-		? openssl_pkey_new()
-		: openssl_pkey_new($config['OPENSSL']);
-	openssl_pkey_export($key_pair, $self_private_key);
-	$details = openssl_pkey_get_details($key_pair);
-	$self_public_key = $details['key'];
+	initializeOpenSsl($config['OPENSSL']);
+	$keyPair = openssl_pkey_new($config['OPENSSL']);
+	openssl_pkey_export($keyPair, $selfPrivateKey, NULL, $config['OPENSSL']);
+	$details = openssl_pkey_get_details($keyPair);
+	$selfPublicKey = $details['key'];
 
 	$runningFilePath = getRunningFilePath();
 	$runningData = [
 		'TIMESTAMP' => date('c'),
-		//'ACCESS_TOKEN' => bin2hex(openssl_random_pseudo_bytes(ACCESS_TOKEN_LENGTH)),
-		'ACCESS_TOKEN' => 'TEST',
+		'ACCESS_TOKEN' => bin2hex(openssl_random_pseudo_bytes(ACCESS_TOKEN_LENGTH)),
 		'SEQUENCE' => SEQUENCE_HELLO,
 		'KEYS' => [
-			'SELF_PUBLIC' => $self_public_key,
-			'SELF_PRIVATE' => $self_private_key,
-			'CLIENT_PUBLIC' => $client_public_key,
+			'SELF_PUBLIC' => $selfPublicKey,
+			'SELF_PRIVATE' => $selfPrivateKey,
+			'CLIENT_PUBLIC' => $clientPublicKey,
 		],
 	];
 	saveRunningFile($runningFilePath, $runningData);
@@ -257,7 +291,7 @@ function sequenceHello(array $config)
 	outputLog($runningData);
 
 	$result = implode("\n", [
-		'token:' . encryptPublicKey($client_public_key, $runningData['ACCESS_TOKEN']),
+		'token:' . encryptPublicKey($clientPublicKey, $runningData['ACCESS_TOKEN']),
 		'public_key:' . base64_encode($runningData['KEYS']['SELF_PUBLIC']),
 	]);
 
@@ -268,7 +302,17 @@ function sequenceInitialize(array $config, array $runningData)
 {
 	outputLog('SEQUENCE_INITIALIZE');
 
-	//TODO: アクセスキー確認
+	if (!isset($_POST[PARAM_KEY])) {
+		exitApp(HTTP_STATUS_NOT_FOUND);
+	}
+	$encAccessKey = $_POST[PARAM_KEY];
+
+	initializeOpenSsl($config['OPENSSL']);
+	$rawAccessKey = decryptPrivateKey($runningData['KEYS']['SELF_PRIVATE'], $encAccessKey);
+
+	if ($config['ACCESS_KEY'] != $rawAccessKey) {
+		exitApp(HTTP_STATUS_NOT_FOUND);
+	}
 
 	$dirs = [
 		getReceiveDirectoryPath(),
@@ -442,20 +486,22 @@ function main()
 				exitApp(HTTP_STATUS_NOT_FOUND);
 			}
 
-			$authHeader = $config['AUTH_HEADER'];
-			if (!isset($_SERVER[$authHeader])) {
-				outputLog("トークンヘッダ($authHeader)未設定");
-				exitApp(HTTP_STATUS_NOT_FOUND);
-			}
-			$enabledLifeTime = isEnabledLifeTime($config['TOKEN_EXPIRATION'], $runningData);
-			if (!$enabledLifeTime) {
-				outputLog('無効な実行中ファイルが存在する');
-				exitApp(HTTP_STATUS_NOT_FOUND);
-			}
-			$enabledToken = isEnabledToken(trim($_SERVER[$authHeader]), $runningData);
-			if (!$enabledToken) {
-				outputLog("トークン無効($authHeader): $_SERVER[$authHeader]");
-				exitApp(HTTP_STATUS_NOT_FOUND);
+			if ($seq != SEQUENCE_INITIALIZE) {
+				$authHeader = $config['AUTH_HEADER'];
+				if (!isset($_SERVER[$authHeader])) {
+					outputLog("トークンヘッダ($authHeader)未設定");
+					exitApp(HTTP_STATUS_NOT_FOUND);
+				}
+				$enabledLifeTime = isEnabledLifeTime($config['TOKEN_EXPIRATION'], $runningData);
+				if (!$enabledLifeTime) {
+					outputLog('無効な実行中ファイルが存在する');
+					exitApp(HTTP_STATUS_NOT_FOUND);
+				}
+				$enabledToken = isEnabledToken(trim($_SERVER[$authHeader]), $runningData);
+				if (!$enabledToken) {
+					outputLog("トークン無効($authHeader): $_SERVER[$authHeader]");
+					exitApp(HTTP_STATUS_NOT_FOUND);
+				}
 			}
 
 			switch ($seq) {

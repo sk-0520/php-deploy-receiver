@@ -2,8 +2,8 @@
 
 URL=http://localhost/deploy/php-deploy-receiver.php
 #URL=http://peserver.php.xdomain.jp/php-deploy-receiver/php-deploy-receiver.php
+RAW_ACCESS_KEY=password
 AUTH_HEADER_NAME=DEPLOY
-AUTH_HEADER_VALUE=TEST
 ARCHIVE_FILE_NAME=public_html.zip
 SPLIT_SIZE=10MB
 
@@ -12,7 +12,7 @@ LOCAL_SELF_PRIVATE_KEY=${LOCAL_TEMP_DIR}/self-private-key.pem
 LOCAL_SELF_PUBLIC_KEY=${LOCAL_TEMP_DIR}/self-public-key.pem
 LOCAL_INIT_DATA=${LOCAL_TEMP_DIR}/init.dat
 LOCAL_ENC_ACCESS_TOKEN=${LOCAL_TEMP_DIR}/access-token.enc
-LOCAL_DEC_ACCESS_TOKEN=${LOCAL_TEMP_DIR}/access-token.dec
+LOCAL_RAW_ACCESS_TOKEN=${LOCAL_TEMP_DIR}/access-token.raw
 LOCAL_SERVER_PUBLIC_KEY=${LOCAL_TEMP_DIR}/server-public-key.dat
 LOCAL_FILES_DIR=local-files
 
@@ -37,9 +37,9 @@ function saveData
 {
 	local KEY=$1
 	local FILE=$2
-	echo "${KEY} -> "
 	LINE=$(grep "^$KEY:" ${LOCAL_INIT_DATA})
 	echo "${LINE#*:}" | base64 --decode > $FILE
+	echo "${KEY} -> ${LINE#*:}"
 }
 
 #-----------------------------------------------
@@ -55,7 +55,7 @@ echo HELLO!
 openssl genrsa 1024 > ${LOCAL_SELF_PRIVATE_KEY}
 openssl rsa -in ${LOCAL_SELF_PRIVATE_KEY} -pubout -out ${LOCAL_SELF_PUBLIC_KEY}
 
-curl -v -o ${LOCAL_INIT_DATA} -X POST -F seq=${SEQUENCE_HELLO} -F pub=@${LOCAL_SELF_PUBLIC_KEY} $URL
+curl -s -o ${LOCAL_INIT_DATA} -X POST -F seq=${SEQUENCE_HELLO} -F pub=@${LOCAL_SELF_PUBLIC_KEY} $URL
 
 cat ${LOCAL_INIT_DATA}
 
@@ -64,13 +64,18 @@ echo test!!
 saveData 'token' ${LOCAL_ENC_ACCESS_TOKEN}
 saveData 'public_key' ${LOCAL_SERVER_PUBLIC_KEY}
 
-cat ${LOCAL_ENC_ACCESS_TOKEN} | openssl rsautl -decrypt -inkey ${LOCAL_SELF_PRIVATE_KEY} > ${LOCAL_DEC_ACCESS_TOKEN}
+cat ${LOCAL_ENC_ACCESS_TOKEN} | openssl rsautl -decrypt -inkey ${LOCAL_SELF_PRIVATE_KEY} > ${LOCAL_RAW_ACCESS_TOKEN}
 
-exit;
-
+AUTH_HEADER_VALUE=$(cat ${LOCAL_RAW_ACCESS_TOKEN})
+echo "LOCAL_RAW_ACCESS_TOKEN: `cat $LOCAL_RAW_ACCESS_TOKEN`"
 echo init
 
-curl -v -X POST -d seq=${SEQUENCE_INITIALIZE} -H "${AUTH_HEADER_NAME}: ${AUTH_HEADER_VALUE}" $URL
+echo "RAW_ACCESS_KEY: ${RAW_ACCESS_KEY}"
+ENC_ACCESS_KEY=$(echo -n ${RAW_ACCESS_KEY} | openssl rsautl -encrypt -pubin -inkey ${LOCAL_SERVER_PUBLIC_KEY} | base64 --wrap=0)
+echo
+echo "ENC_ACCESS_KEY-> ${ENC_ACCESS_KEY}"
+echo
+curl -v -X POST -d seq=${SEQUENCE_INITIALIZE} --data-urlencode key=${ENC_ACCESS_KEY} $URL
 
 echo recv
 
