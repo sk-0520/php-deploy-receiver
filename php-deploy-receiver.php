@@ -195,6 +195,31 @@ function getChildrenFiles(string $directoryPath, bool $recursive): array
 	return $files;
 }
 
+/**
+ * 暗号化。
+ *
+ * クライアントの公開鍵を使用してクライアントに渡す暗号データを作成する。
+ *
+ * @return string 暗号化されたbase64文字列
+ */
+function encryptPublicKey(string $public_key, string $source): string
+{
+	openssl_public_encrypt($source, $rawData, $public_key);
+	return base64_encode($rawData);
+}
+
+/**
+ * 復号化。
+ *
+ * 本モジュールが作成した秘密鍵でクライアントから送られてきた暗号データを復号する。
+ *
+ * @param string $data 暗号化されたbase64文字列
+ */
+function decryptPrivateKey(string $private_key, string $data): string
+{
+	throw new Error('not impl');
+}
+
 //###########################################################################
 // 各シーケンス -------------------------------
 function sequenceHello(array $config)
@@ -231,10 +256,12 @@ function sequenceHello(array $config)
 	outputLog('RE:SEQUENCE_HELLO');
 	outputLog($runningData);
 
-	exitOutput(200, 'application/json', json_encode([
-		'token' => $runningData['ACCESS_TOKEN'],
-		'public_key' => $runningData['KEYS']['SELF_PUBLIC'],
-	]));
+	$result = implode("\n", [
+		'token:' . encryptPublicKey($client_public_key, $runningData['ACCESS_TOKEN']),
+		'public_key:' . base64_encode($runningData['KEYS']['SELF_PUBLIC']),
+	]);
+
+	exitOutput(200, 'text/plain', $result);
 }
 
 function sequenceInitialize(array $config, array $runningData)
@@ -330,7 +357,7 @@ function sequenceUpdate(array $config, array $runningData)
 	$expandDirPath = getExpandDirectoryPath();
 	$expandFilePaths = getChildrenFiles($expandDirPath, true);
 	$expandFileRelativePaths = array_map(function ($i) use ($expandDirPath) {
-		outputLog('UPDATE: '. $i);
+		outputLog('UPDATE: ' . $i);
 		return mb_substr($i, mb_strlen($expandDirPath) + 1);
 	}, $expandFilePaths);
 
