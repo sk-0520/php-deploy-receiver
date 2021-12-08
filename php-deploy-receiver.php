@@ -156,10 +156,7 @@ function exitOutput(int $httpStatusCode, string $contentType, $content)
 
 function removeDirectory(string $directoryPath): void
 {
-	if (mb_substr($directoryPath, mb_strlen($directoryPath) - 1, 1) != DIRECTORY_SEPARATOR) {
-		$directoryPath .= DIRECTORY_SEPARATOR;
-	}
-	$files = glob($directoryPath . '*', GLOB_MARK);
+	$files = getChildrenFiles($directoryPath, false);
 	foreach ($files as $file) {
 		if (is_dir($file)) {
 			removeDirectory($file);
@@ -178,7 +175,7 @@ function cleanupDirectory(string $directoryPath): void
 	mkdir($directoryPath, 0777, true);
 }
 
-function getChildrenFiles(string $directoryPath): array
+function getChildrenFiles(string $directoryPath, bool $recursive): array
 {
 	$files = [];
 	$items = scandir($directoryPath);
@@ -188,8 +185,8 @@ function getChildrenFiles(string $directoryPath): array
 		}
 		$path = joinPath($directoryPath, $item);
 
-		if (is_dir($path)) {
-			$files = array_merge($files, getChildrenFiles($path));
+		if ($recursive && is_dir($path)) {
+			$files = array_merge($files, getChildrenFiles($path, $recursive));
 		} else {
 			$files[] = joinPath($directoryPath, $item);
 		}
@@ -319,7 +316,7 @@ function sequencePrepare(array $config, array $runningData)
 	$zip->extractTo($expandDirPath);
 	$zip->close();
 
-	$expandFilePaths = getChildrenFiles($expandDirPath);
+	$expandFilePaths = getChildrenFiles($expandDirPath, true);
 	foreach ($expandFilePaths as $expandFilePath) {
 		outputLog('path: ' . $expandFilePath);
 		outputLog('size: ' . filesize($expandFilePath));
@@ -331,7 +328,7 @@ function sequenceUpdate(array $config, array $runningData)
 	outputLog('SEQUENCE_UPDATE');
 
 	$expandDirPath = getExpandDirectoryPath();
-	$expandFilePaths = getChildrenFiles($expandDirPath);
+	$expandFilePaths = getChildrenFiles($expandDirPath, true);
 	$expandFileRelativePaths = array_map(function ($i) use ($expandDirPath) {
 		outputLog('UPDATE: '. $i);
 		return mb_substr($i, mb_strlen($expandDirPath) + 1);

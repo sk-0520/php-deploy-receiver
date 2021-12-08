@@ -1,7 +1,7 @@
 #!/bin/bash -ue
 
 URL=http://localhost/deploy/php-deploy-receiver.php
-URL=http://peserver.php.xdomain.jp/php-deploy-receiver/php-deploy-receiver.php
+#URL=http://peserver.php.xdomain.jp/php-deploy-receiver/php-deploy-receiver.php
 AUTH_HEADER_NAME=DEPLOY
 AUTH_HEADER_VALUE=TEST
 ARCHIVE_FILE_NAME=public_html.zip
