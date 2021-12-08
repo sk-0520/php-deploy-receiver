@@ -214,7 +214,7 @@ function getChildrenFiles(string $directoryPath, bool $recursive): array
  *
  * @param array $config
  */
-function initializeOpenSsl(array $config): void
+function initializeOpenSsl(?array $config): void
 {
 	/*
 	$openssl = openssl_pkey_new($config);

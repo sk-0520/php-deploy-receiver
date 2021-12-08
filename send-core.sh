@@ -1,5 +1,7 @@
 #!/bin/bash -ue
 
+SETTING_LOG_LEVEL="${SETTING_LOG_LEVEL:=i}"
+
 LOCAL_TEMP_DIR=local-temp
 LOCAL_SELF_PRIVATE_KEY=${LOCAL_TEMP_DIR}/self-private-key.pem
 LOCAL_SELF_PUBLIC_KEY=${LOCAL_TEMP_DIR}/self-public-key.pem
@@ -15,12 +17,68 @@ SEQUENCE_RECEIVE=30
 SEQUENCE_PREPARE=40
 SEQUENCE_UPDATE=50
 
-function msg()
+function getLogLevel()
 {
 	local LEVEL=$1 # T/D/I/W/E
 
-	echo ${@:2:($#-1)}
+	local RESULT=0
+	case $LEVEL in
+		[tT]|'trace' )
+			RESULT=1
+			;;
+		[dD]|'debug' )
+			RESULT=2
+			;;
+		[iI]|'info' )
+			RESULT=3
+			;;
+		[wW]|'warn' )
+			RESULT=4
+			;;
+		[eE]|'error' )
+			RESULT=5
+			;;
+	esac
+
+	echo $RESULT
+
+	# return $RESULT
 }
+
+function msg()
+{
+	local LEVEL=$1 # T/D/I/W/E
+	local MSG_LEVEL=$(getLogLevel ${LEVEL})
+	local DEF_LEVEL=$(getLogLevel ${SETTING_LOG_LEVEL})
+
+	# echo "!!!!!!!!!!: $LEVEL < $SETTING_LOG_LEVEL"
+	# echo "XXXXXXXXXX: $MSG_LEVEL < $DEF_LEVEL"
+
+	if [ "$MSG_LEVEL" -lt "$DEF_LEVEL" ] ; then
+		# echo "byebye: $MSG_LEVEL < $DEF_LEVEL"
+		return
+	fi
+
+	case $LEVEL in
+		T ) echo -ne "" ;;
+		D ) echo -ne "" ;;
+		I ) echo -ne "" ;;
+		W ) echo -ne "" ;;
+		E ) echo -ne "" ;;
+		* ) echo -ne "" ;;
+	esac
+
+	echo -n ${@:2:($#-1)}
+	echo -e "\e[m"
+}
+
+function title()
+{
+	echo ''
+	echo $*
+	echo ''
+}
+
 
 function cleanupDir
 {
@@ -39,12 +97,12 @@ function saveData
 	local FILE=$2
 	LINE=$(grep "^$KEY:" ${LOCAL_INIT_DATA})
 	echo "${LINE#*:}" | base64 --decode > $FILE
-	echo "${KEY} -> ${LINE#*:}"
+	msg d "${KEY} -> ${LINE#*:}"
 }
 
 #-----------------------------------------------
 
-msg I START
+msg i START
 
 cleanupDir ${LOCAL_TEMP_DIR}
 cleanupDir ${LOCAL_FILES_DIR}
@@ -52,47 +110,51 @@ cleanupDir ${LOCAL_FILES_DIR}
 # デバッグ用
 rm -f running.json
 
-echo HELLO!
+title HELLO!
 
 openssl genrsa 1024 > ${LOCAL_SELF_PRIVATE_KEY}
 openssl rsa -in ${LOCAL_SELF_PRIVATE_KEY} -pubout -out ${LOCAL_SELF_PUBLIC_KEY}
 
-curl -s -o ${LOCAL_INIT_DATA} -X POST -F seq=${SEQUENCE_HELLO} -F pub=@${LOCAL_SELF_PUBLIC_KEY} ${SETTING_URL}
+curl --show-error -o ${LOCAL_INIT_DATA} -X POST -F seq=${SEQUENCE_HELLO} -F pub=@${LOCAL_SELF_PUBLIC_KEY} ${SETTING_URL}
 
-cat ${LOCAL_INIT_DATA}
+msg t $(cat ${LOCAL_INIT_DATA})
 
-echo
-echo test!!
+msg t
+msg t test!!
 saveData 'token' ${LOCAL_ENC_ACCESS_TOKEN}
 saveData 'public_key' ${LOCAL_SERVER_PUBLIC_KEY}
 
 cat ${LOCAL_ENC_ACCESS_TOKEN} | openssl rsautl -decrypt -inkey ${LOCAL_SELF_PRIVATE_KEY} > ${LOCAL_RAW_ACCESS_TOKEN}
 
 AUTH_HEADER_VALUE=$(cat ${LOCAL_RAW_ACCESS_TOKEN})
-echo "LOCAL_RAW_ACCESS_TOKEN: `cat $LOCAL_RAW_ACCESS_TOKEN`"
-echo init
+msg t "LOCAL_RAW_ACCESS_TOKEN: `cat $LOCAL_RAW_ACCESS_TOKEN`"
 
-echo "SETTING_ACCESS_KEY: ${SETTING_ACCESS_KEY}"
+title init
+
+msg t "SETTING_ACCESS_KEY: ${SETTING_ACCESS_KEY}"
 ENC_ACCESS_KEY=$(echo -n ${SETTING_ACCESS_KEY} | openssl rsautl -encrypt -pubin -inkey ${LOCAL_SERVER_PUBLIC_KEY} | base64 --wrap=0)
-echo
-echo "ENC_ACCESS_KEY-> ${ENC_ACCESS_KEY}"
-echo
-curl -v -X POST -d seq=${SEQUENCE_INITIALIZE} --data-urlencode key=${ENC_ACCESS_KEY} ${SETTING_URL}
+msg t
+msg t "ENC_ACCESS_KEY-> ${ENC_ACCESS_KEY}"
+msg t
+curl --show-error -X POST -d seq=${SEQUENCE_INITIALIZE} --data-urlencode key=${ENC_ACCESS_KEY} ${SETTING_URL}
 
-echo recv
+title recv
 
 split --bytes=${SETTING_SPLIT_SIZE} --numeric-suffixes=1 --suffix-length=8 ${SETTING_ARCHIVE_FILE_NAME} ${LOCAL_FILES_DIR}/
 INDEX=1
 for PART_FILE in `ls -1 -v ${LOCAL_FILES_DIR}/`; do
-	curl -v -X POST -F seq=${SEQUENCE_RECEIVE} -F file=@${LOCAL_FILES_DIR}/${PART_FILE} -F number=$INDEX  -H "${SETTING_AUTH_HEADER_NAME}: ${AUTH_HEADER_VALUE}" ${SETTING_URL}
+	curl --show-error -X POST -F seq=${SEQUENCE_RECEIVE} -F file=@${LOCAL_FILES_DIR}/${PART_FILE} -F number=$INDEX  -H "${SETTING_AUTH_HEADER_NAME}: ${AUTH_HEADER_VALUE}" ${SETTING_URL}
 	let INDEX++
 done
 
-echo prepare
+title prepare
 
-HASH=$(sha512sum --binary ${SETTING_ARCHIVE_FILE_NAME})
-curl -v -X POST -d seq=${SEQUENCE_PREPARE} -d algorithm=SHA512 -d hash=${HASH} -H "${SETTING_AUTH_HEADER_NAME}: ${AUTH_HEADER_VALUE}" ${SETTING_URL}
+HASH=$(sha512sum --binary ${SETTING_ARCHIVE_FILE_NAME} | cut -d ' ' -f 1)
+msg t $HASH
+curl --show-error -X POST -d seq=${SEQUENCE_PREPARE} -d algorithm=SHA512 -d hash=${HASH} -H "${SETTING_AUTH_HEADER_NAME}: ${AUTH_HEADER_VALUE}" ${SETTING_URL}
 
-echo update
+title update
 
-curl -v -X POST -d seq=${SEQUENCE_UPDATE} -H "${SETTING_AUTH_HEADER_NAME}: ${AUTH_HEADER_VALUE}" ${SETTING_URL}
+curl --show-error -X POST -d seq=${SEQUENCE_UPDATE} -H "${SETTING_AUTH_HEADER_NAME}: ${AUTH_HEADER_VALUE}" ${SETTING_URL}
+
+title END
