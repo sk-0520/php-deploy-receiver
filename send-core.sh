@@ -1,12 +1,5 @@
 #!/bin/bash -ue
 
-URL=http://localhost/deploy/php-deploy-receiver.php
-#URL=http://peserver.php.xdomain.jp/php-deploy-receiver/php-deploy-receiver.php
-RAW_ACCESS_KEY=password
-AUTH_HEADER_NAME=DEPLOY
-ARCHIVE_FILE_NAME=public_html.zip
-SPLIT_SIZE=10MB
-
 LOCAL_TEMP_DIR=local-temp
 LOCAL_SELF_PRIVATE_KEY=${LOCAL_TEMP_DIR}/self-private-key.pem
 LOCAL_SELF_PUBLIC_KEY=${LOCAL_TEMP_DIR}/self-public-key.pem
@@ -21,6 +14,13 @@ SEQUENCE_INITIALIZE=20
 SEQUENCE_RECEIVE=30
 SEQUENCE_PREPARE=40
 SEQUENCE_UPDATE=50
+
+function msg()
+{
+	local LEVEL=$1 # T/D/I/W/E
+
+	echo ${@:2:($#-1)}
+}
 
 function cleanupDir
 {
@@ -44,6 +44,8 @@ function saveData
 
 #-----------------------------------------------
 
+msg I START
+
 cleanupDir ${LOCAL_TEMP_DIR}
 cleanupDir ${LOCAL_FILES_DIR}
 
@@ -55,7 +57,7 @@ echo HELLO!
 openssl genrsa 1024 > ${LOCAL_SELF_PRIVATE_KEY}
 openssl rsa -in ${LOCAL_SELF_PRIVATE_KEY} -pubout -out ${LOCAL_SELF_PUBLIC_KEY}
 
-curl -s -o ${LOCAL_INIT_DATA} -X POST -F seq=${SEQUENCE_HELLO} -F pub=@${LOCAL_SELF_PUBLIC_KEY} $URL
+curl -s -o ${LOCAL_INIT_DATA} -X POST -F seq=${SEQUENCE_HELLO} -F pub=@${LOCAL_SELF_PUBLIC_KEY} ${SETTING_URL}
 
 cat ${LOCAL_INIT_DATA}
 
@@ -70,27 +72,27 @@ AUTH_HEADER_VALUE=$(cat ${LOCAL_RAW_ACCESS_TOKEN})
 echo "LOCAL_RAW_ACCESS_TOKEN: `cat $LOCAL_RAW_ACCESS_TOKEN`"
 echo init
 
-echo "RAW_ACCESS_KEY: ${RAW_ACCESS_KEY}"
-ENC_ACCESS_KEY=$(echo -n ${RAW_ACCESS_KEY} | openssl rsautl -encrypt -pubin -inkey ${LOCAL_SERVER_PUBLIC_KEY} | base64 --wrap=0)
+echo "SETTING_ACCESS_KEY: ${SETTING_ACCESS_KEY}"
+ENC_ACCESS_KEY=$(echo -n ${SETTING_ACCESS_KEY} | openssl rsautl -encrypt -pubin -inkey ${LOCAL_SERVER_PUBLIC_KEY} | base64 --wrap=0)
 echo
 echo "ENC_ACCESS_KEY-> ${ENC_ACCESS_KEY}"
 echo
-curl -v -X POST -d seq=${SEQUENCE_INITIALIZE} --data-urlencode key=${ENC_ACCESS_KEY} $URL
+curl -v -X POST -d seq=${SEQUENCE_INITIALIZE} --data-urlencode key=${ENC_ACCESS_KEY} ${SETTING_URL}
 
 echo recv
 
-split --bytes=${SPLIT_SIZE} --numeric-suffixes=1 --suffix-length=8 ${ARCHIVE_FILE_NAME} ${LOCAL_FILES_DIR}/
+split --bytes=${SETTING_SPLIT_SIZE} --numeric-suffixes=1 --suffix-length=8 ${SETTING_ARCHIVE_FILE_NAME} ${LOCAL_FILES_DIR}/
 INDEX=1
 for PART_FILE in `ls -1 -v ${LOCAL_FILES_DIR}/`; do
-	curl -v -X POST -F seq=${SEQUENCE_RECEIVE} -F file=@${LOCAL_FILES_DIR}/${PART_FILE} -F number=$INDEX  -H "${AUTH_HEADER_NAME}: ${AUTH_HEADER_VALUE}" $URL
+	curl -v -X POST -F seq=${SEQUENCE_RECEIVE} -F file=@${LOCAL_FILES_DIR}/${PART_FILE} -F number=$INDEX  -H "${SETTING_AUTH_HEADER_NAME}: ${AUTH_HEADER_VALUE}" ${SETTING_URL}
 	let INDEX++
 done
 
 echo prepare
 
-HASH=$(sha512sum --binary ${ARCHIVE_FILE_NAME})
-curl -v -X POST -d seq=${SEQUENCE_PREPARE} -d algorithm=SHA512 -d hash=${HASH} -H "${AUTH_HEADER_NAME}: ${AUTH_HEADER_VALUE}" $URL
+HASH=$(sha512sum --binary ${SETTING_ARCHIVE_FILE_NAME})
+curl -v -X POST -d seq=${SEQUENCE_PREPARE} -d algorithm=SHA512 -d hash=${HASH} -H "${SETTING_AUTH_HEADER_NAME}: ${AUTH_HEADER_VALUE}" ${SETTING_URL}
 
 echo update
 
-curl -v -X POST -d seq=${SEQUENCE_UPDATE} -H "${AUTH_HEADER_NAME}: ${AUTH_HEADER_VALUE}" $URL
+curl -v -X POST -d seq=${SEQUENCE_UPDATE} -H "${SETTING_AUTH_HEADER_NAME}: ${AUTH_HEADER_VALUE}" ${SETTING_URL}
