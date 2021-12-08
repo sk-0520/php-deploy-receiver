@@ -112,7 +112,7 @@ rm -f running.json
 
 title HELLO!
 
-openssl genrsa 1024 > ${LOCAL_SELF_PRIVATE_KEY}
+openssl genrsa 2048 > ${LOCAL_SELF_PRIVATE_KEY}
 openssl rsa -in ${LOCAL_SELF_PRIVATE_KEY} -pubout -out ${LOCAL_SELF_PUBLIC_KEY}
 
 curl --show-error -o ${LOCAL_INIT_DATA} -X POST -F seq=${SEQUENCE_HELLO} -F pub=@${LOCAL_SELF_PUBLIC_KEY} ${SETTING_URL}
