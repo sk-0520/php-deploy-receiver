@@ -27,6 +27,7 @@ define('PARAM_ALGORITHM', 'algorithm');
 define('PARAM_HASH', 'hash');
 
 //###########################################################################
+
 // 共通関数 -------------------------------
 
 /**
@@ -84,9 +85,9 @@ function clearLog()
 	}
 }
 
-function outputLog($message)
+function outputLog($message, int $index = 0)
 {
-	$backtrace = debug_backtrace(DEBUG_BACKTRACE_PROVIDE_OBJECT, 1)[0];
+	$backtrace = debug_backtrace(DEBUG_BACKTRACE_PROVIDE_OBJECT, 2)[$index];
 
 	if (is_string($message)) {
 		$value = $message;
@@ -254,6 +255,19 @@ function decryptPrivateKey(string $privateKey, string $base64Value): string
 		throw new Exception(openssl_error_string());
 	}
 	return $rawValue;
+}
+
+// 共通データ -------------------------------
+class ScriptArgument
+{
+	public $publicDirectoryPath;
+	public $expandDirectoryPath;
+
+	public function __construct($publicDirectoryPath, $expandDirectoryPath)
+	{
+		$this->publicDirectoryPath = $publicDirectoryPath;
+		$this->expandDirectoryPath = $expandDirectoryPath;
+	}
 }
 
 //###########################################################################
@@ -439,15 +453,12 @@ function sequenceUpdate(array $config, array $runningData)
 
 
 	// ユーザースクリプト用データ
-	$scriptData = [
-		'public' => $config['PUBLIC_DIR_PATH'],
-		'expand' => getExpandDirectoryPath(),
-	];
+	$scriptArgument = new ScriptArgument($config['PUBLIC_DIR_PATH'], getExpandDirectoryPath());
 	// 前処理スクリプトの実施
 	$beforeScriptPath = joinPath(getExpandDirectoryPath(), $config['BEFORE_SCRIPT']);
 	if (is_file($beforeScriptPath)) {
 		require_once $beforeScriptPath;
-		call_user_func('before_update', $scriptData);
+		call_user_func('before_update', $scriptArgument);
 	}
 
 	//TODO: .htaccess 制御
@@ -479,7 +490,7 @@ function sequenceUpdate(array $config, array $runningData)
 	$afterScriptPath = joinPath(getExpandDirectoryPath(), $config['AFTER_SCRIPT']);
 	if (is_file($afterScriptPath)) {
 		require_once $afterScriptPath;
-		call_user_func('after_update', $scriptData);
+		call_user_func('after_update', $scriptArgument);
 	}
 
 	// 退避ファイル補正
