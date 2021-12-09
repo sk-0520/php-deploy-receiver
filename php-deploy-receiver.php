@@ -439,7 +439,7 @@ function sequenceUpdate(array $config, array $runningData)
 
 
 	// ユーザースクリプト用データ
-	$userData = [
+	$scriptData = [
 		'public' => $config['PUBLIC_DIR_PATH'],
 		'expand' => getExpandDirectoryPath(),
 	];
@@ -447,7 +447,7 @@ function sequenceUpdate(array $config, array $runningData)
 	$beforeScriptPath = joinPath(getExpandDirectoryPath(), $config['BEFORE_SCRIPT']);
 	if (is_file($beforeScriptPath)) {
 		require_once $beforeScriptPath;
-		call_user_func('before_update', $userData);
+		call_user_func('before_update', $scriptData);
 	}
 
 	//TODO: .htaccess 制御
@@ -479,7 +479,7 @@ function sequenceUpdate(array $config, array $runningData)
 	$afterScriptPath = joinPath(getExpandDirectoryPath(), $config['AFTER_SCRIPT']);
 	if (is_file($afterScriptPath)) {
 		require_once $afterScriptPath;
-		call_user_func('after_update', $userData);
+		call_user_func('after_update', $scriptData);
 	}
 
 	// 退避ファイル補正
