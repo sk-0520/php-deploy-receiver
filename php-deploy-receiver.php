@@ -268,6 +268,21 @@ class ScriptArgument
 		$this->publicDirectoryPath = $publicDirectoryPath;
 		$this->expandDirectoryPath = $expandDirectoryPath;
 	}
+
+	public function log(string $message): void
+	{
+		outputLog($message, 1);
+	}
+
+	public function joinPath(string $basePath, string ...$addPaths): string
+	{
+		return joinPath($basePath, ...$addPaths);
+	}
+
+	public function removeDirectory(string $directoryPath): void
+	{
+		removeDirectory($directoryPath);
+	}
 }
 
 //###########################################################################
@@ -457,6 +472,7 @@ function sequenceUpdate(array $config, array $runningData)
 	// 前処理スクリプトの実施
 	$beforeScriptPath = joinPath(getExpandDirectoryPath(), $config['BEFORE_SCRIPT']);
 	if (is_file($beforeScriptPath)) {
+		outputLog('beforeScriptPath: ' . $beforeScriptPath);
 		require_once $beforeScriptPath;
 		call_user_func('before_update', $scriptArgument);
 	}
@@ -489,6 +505,7 @@ function sequenceUpdate(array $config, array $runningData)
 	// 後処理スクリプトの実施
 	$afterScriptPath = joinPath(getExpandDirectoryPath(), $config['AFTER_SCRIPT']);
 	if (is_file($afterScriptPath)) {
+		outputLog('afterScriptPath: ' . $afterScriptPath);
 		require_once $afterScriptPath;
 		call_user_func('after_update', $scriptArgument);
 	}
