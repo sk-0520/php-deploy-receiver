@@ -361,7 +361,17 @@ function sequencePrepare(array $config, array $runningData)
 {
 	outputLog('SEQUENCE_PREPARE');
 
-	//TODO: ハッシュ突合確認
+	if(!isset($_POST[PARAM_ALGORITHM])) {
+		exitAppWithMessage(HTTP_STATUS_SERVER_ERROR, 'アルゴリズム未指定');
+	}
+	$algorithm = $_POST[PARAM_ALGORITHM];
+	outputLog('algorithm: ' . $algorithm);
+
+	if(!isset($_POST[PARAM_HASH])) {
+		exitAppWithMessage(HTTP_STATUS_SERVER_ERROR, 'ハッシュ値未指定');
+	}
+	$hashValue = $_POST[PARAM_HASH];
+	outputLog('hashValue: ' . $hashValue);
 
 	outputLog('受信ファイル結合');
 
@@ -380,6 +390,14 @@ function sequencePrepare(array $config, array $runningData)
 
 	outputLog('name: ' . $archiveFilePath);
 	outputLog('size: ' . filesize($archiveFilePath));
+	outputLog('size: ' . filesize($archiveFilePath));
+
+	$fileHashValue = hash_file($algorithm, $archiveFilePath);
+	outputLog('hash: ' . $fileHashValue);
+
+	if(strcasecmp($hashValue, $fileHashValue)) {
+		exitAppWithMessage(HTTP_STATUS_SERVER_ERROR, 'ハッシュ値が合わない');
+	}
 
 	outputLog('アーカイブ展開');
 

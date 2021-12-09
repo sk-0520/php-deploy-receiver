@@ -151,10 +151,10 @@ title prepare
 
 HASH=$(sha512sum --binary ${SETTING_ARCHIVE_FILE_NAME} | cut -d ' ' -f 1)
 msg t $HASH
-curl --show-error -X POST -d seq=${SEQUENCE_PREPARE} -d algorithm=SHA512 -d hash=${HASH} -H "${SETTING_AUTH_HEADER_NAME}: ${AUTH_HEADER_VALUE}" ${SETTING_URL}
+curl --show-error -X POST -d seq=${SEQUENCE_PREPARE} -d algorithm=sha512 -d hash=${HASH} -H "${SETTING_AUTH_HEADER_NAME}: ${AUTH_HEADER_VALUE}" ${SETTING_URL}
 
 title update
 
-curl --show-error -X POST -d seq=${SEQUENCE_UPDATE} --data-urlencode _key=${ENC_ACCESS_KEY} -H "${SETTING_AUTH_HEADER_NAME}: ${AUTH_HEADER_VALUE}" ${SETTING_URL}
+curl --show-error -X POST -d seq=${SEQUENCE_UPDATE} --data-urlencode key=${ENC_ACCESS_KEY} -H "${SETTING_AUTH_HEADER_NAME}: ${AUTH_HEADER_VALUE}" ${SETTING_URL}
 
 title END
