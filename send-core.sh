@@ -155,6 +155,6 @@ curl --show-error -X POST -d seq=${SEQUENCE_PREPARE} -d algorithm=SHA512 -d hash
 
 title update
 
-curl --show-error -X POST -d seq=${SEQUENCE_UPDATE} --data-urlencode key=${ENC_ACCESS_KEY} -H "${SETTING_AUTH_HEADER_NAME}: ${AUTH_HEADER_VALUE}" ${SETTING_URL}
+curl --show-error -X POST -d seq=${SEQUENCE_UPDATE} --data-urlencode _key=${ENC_ACCESS_KEY} -H "${SETTING_AUTH_HEADER_NAME}: ${AUTH_HEADER_VALUE}" ${SETTING_URL}
 
 title END

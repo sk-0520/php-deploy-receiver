@@ -360,7 +360,7 @@ function sequenceReceive(array $config, array $runningData)
 function sequencePrepare(array $config, array $runningData)
 {
 	outputLog('SEQUENCE_PREPARE');
-	
+
 	//TODO: ハッシュ突合確認
 
 	outputLog('受信ファイル結合');
@@ -400,7 +400,17 @@ function sequenceUpdate(array $config, array $runningData)
 {
 	outputLog('SEQUENCE_UPDATE');
 
-	//TODO: もっかいアクセスキーの突合
+	if (!isset($_POST[PARAM_KEY])) {
+		exitAppWithMessage(HTTP_STATUS_SERVER_ERROR, 'アクセスキー未指定');
+	}
+	$encAccessKey = $_POST[PARAM_KEY];
+
+	initializeOpenSsl($config['OPENSSL']);
+	$rawAccessKey = decryptPrivateKey($runningData['KEYS']['SELF_PRIVATE'], $encAccessKey);
+
+	if ($config['ACCESS_KEY'] != $rawAccessKey) {
+		exitAppWithMessage(HTTP_STATUS_SERVER_ERROR, 'アクセスキー不正');
+	}
 
 	$expandDirPath = getExpandDirectoryPath();
 	$expandFilePaths = getChildrenFiles($expandDirPath, true);
