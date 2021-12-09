@@ -361,13 +361,13 @@ function sequencePrepare(array $config, array $runningData)
 {
 	outputLog('SEQUENCE_PREPARE');
 
-	if(!isset($_POST[PARAM_ALGORITHM])) {
+	if (!isset($_POST[PARAM_ALGORITHM])) {
 		exitAppWithMessage(HTTP_STATUS_SERVER_ERROR, 'アルゴリズム未指定');
 	}
 	$algorithm = $_POST[PARAM_ALGORITHM];
 	outputLog('algorithm: ' . $algorithm);
 
-	if(!isset($_POST[PARAM_HASH])) {
+	if (!isset($_POST[PARAM_HASH])) {
 		exitAppWithMessage(HTTP_STATUS_SERVER_ERROR, 'ハッシュ値未指定');
 	}
 	$hashValue = $_POST[PARAM_HASH];
@@ -395,7 +395,7 @@ function sequencePrepare(array $config, array $runningData)
 	$fileHashValue = hash_file($algorithm, $archiveFilePath);
 	outputLog('hash: ' . $fileHashValue);
 
-	if(strcasecmp($hashValue, $fileHashValue)) {
+	if (strcasecmp($hashValue, $fileHashValue)) {
 		exitAppWithMessage(HTTP_STATUS_SERVER_ERROR, 'ハッシュ値が合わない');
 	}
 
@@ -437,6 +437,19 @@ function sequenceUpdate(array $config, array $runningData)
 		return mb_substr($i, mb_strlen($expandDirPath) + 1);
 	}, $expandFilePaths);
 
+
+	// ユーザースクリプト用データ
+	$userData = [
+		'public' => $config['PUBLIC_DIR_PATH'],
+		'expand' => getExpandDirectoryPath(),
+	];
+	// 前処理スクリプトの実施
+	$beforeScriptPath = joinPath(getExpandDirectoryPath(), $config['BEFORE_SCRIPT']);
+	if (is_file($beforeScriptPath)) {
+		require_once $beforeScriptPath;
+		call_user_func('before_update', $userData);
+	}
+
 	//TODO: .htaccess 制御
 
 	$skipFiles = [];
@@ -460,6 +473,13 @@ function sequenceUpdate(array $config, array $runningData)
 			mkdir($dir, 0777, true);
 		}
 		copy($src, $dst);
+	}
+
+	// 後処理スクリプトの実施
+	$afterScriptPath = joinPath(getExpandDirectoryPath(), $config['AFTER_SCRIPT']);
+	if (is_file($afterScriptPath)) {
+		require_once $afterScriptPath;
+		call_user_func('after_update', $userData);
 	}
 
 	// 退避ファイル補正

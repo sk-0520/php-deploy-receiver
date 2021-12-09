@@ -7,6 +7,10 @@ function getConfig()
 	return [
 		// ☆展開ディレクトリ(事故が怖いのでフルパスで！)
 		'PUBLIC_DIR_PATH' => '/home/user/public_html',
+		// ☆デプロイ前処理(作業ディレクトリからの相対パス) before_update 関数が呼び出される
+		'BEFORE_SCRIPT' => 'php-deploy-receiver/before.php',
+		// ☆デプロイ後処理(作業ディレクトリからの相対パス) after_update 関数が呼び出される
+		'AFTER_SCRIPT' => 'php-deploy-receiver/after.php',
 		// ☆トークン発行に使用するアクセスキー。クライアント公開鍵で暗号化するので大きい場合は死ぬ
 		'ACCESS_KEY' => '',
 		// トークンの有効期限
