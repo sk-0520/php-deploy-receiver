@@ -4,9 +4,12 @@ declare(strict_types=1);
 
 function getConfig()
 {
+	// ☆付きが書き換え箇所
 	return [
-		// ☆展開ディレクトリ(事故が怖いのでフルパスで！)
-		'PUBLIC_DIR_PATH' => '/home/user/public_html',
+		// ☆使用可能なルートパス(フルパス)
+		'ROOT_DIR_PATH' => '/home/user',
+		// ☆展開ディレクトリ(フルパスで)
+		'PUBLIC_DIR' => 'public_html',
 		// ☆デプロイ前処理(作業ディレクトリからの相対パス) before_update 関数が呼び出される
 		'BEFORE_SCRIPT' => 'php-deploy-receiver/before.php',
 		// ☆デプロイ後処理(作業ディレクトリからの相対パス) after_update 関数が呼び出される
@@ -15,7 +18,7 @@ function getConfig()
 		'ACCESS_KEY' => '',
 		// トークンの有効期限
 		'TOKEN_EXPIRATION' => 'PT1H',
-		// ☆アクセストークンヘッダ(HTTP_はApache依存なのに注意)
+		// アクセストークンヘッダ(HTTP_はApache依存なのに注意)
 		'AUTH_HEADER' => 'HTTP_DEPLOY',
 		// ☆配置サーバー(apache, それ以外)。apache なら .htaccess 補正をめっちゃ頑張る, TODO: なんも頑張らん
 		'SERVER' => 'apache',

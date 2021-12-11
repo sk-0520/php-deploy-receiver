@@ -27,9 +27,53 @@ define('PARAM_ALGORITHM', 'algorithm');
 define('PARAM_HASH', 'hash');
 
 //###########################################################################
-
 // 共通関数 -------------------------------
 
+function isNullOrEmpty(?string $s): bool
+{
+	if (is_null($s)) {
+		return true;
+	}
+
+	if ($s === '0') {
+		return false;
+	}
+
+	return empty($s);
+}
+
+function isNullOrWhiteSpace(?string $s): bool
+{
+	if (isNullOrEmpty($s)) {
+		return true;
+	}
+
+	return strlen(trim($s)) === 0;
+}
+
+function getAbsolutePath(string $path)
+{
+	$targetPath = str_replace(['/', '\\'], DIRECTORY_SEPARATOR, $path);
+	$parts = array_filter(explode(DIRECTORY_SEPARATOR, $targetPath), 'mb_strlen');
+	$absolutes = array();
+	foreach ($parts as $part) {
+		if ($part === '.') {
+			continue;
+		}
+		if ($part === '..') {
+			array_pop($absolutes);
+		} else {
+			$absolutes[] = $part;
+		}
+	}
+
+	$result = implode(DIRECTORY_SEPARATOR, $absolutes);
+	if (mb_strlen($targetPath) && $targetPath[0] === DIRECTORY_SEPARATOR) {
+		$result = DIRECTORY_SEPARATOR . $result;
+	}
+
+	return $result;
+}
 /**
  * ファイルパス結合
  *
@@ -41,10 +85,16 @@ define('PARAM_HASH', 'hash');
  */
 function joinPath(string $basePath, string ...$addPaths): string
 {
-	$paths = array_merge([$basePath], $addPaths);
+	$paths = array_merge([$basePath], array_map(function ($s) {
+		return trim($s, '/\\');
+	}, $addPaths));
+	$paths = array_filter($paths, function ($v, $k) {
+		return !isNullOrEmpty($v) && ($k === 0 ? true :  $v !== '/' && $v !== '\\');
+	}, ARRAY_FILTER_USE_BOTH);
+
 
 	$joinedPath = implode(DIRECTORY_SEPARATOR, $paths);
-	return $joinedPath;
+	return getAbsolutePath($joinedPath);
 }
 
 function getLogFilePath(): string
@@ -85,9 +135,9 @@ function clearLog()
 	}
 }
 
-function outputLog($message, int $index = 0)
+function outputLog($message)
 {
-	$backtrace = debug_backtrace(DEBUG_BACKTRACE_PROVIDE_OBJECT, 2)[$index];
+	$backtrace = debug_backtrace(DEBUG_BACKTRACE_PROVIDE_OBJECT, 1)[0];
 
 	if (is_string($message)) {
 		$value = $message;
@@ -261,6 +311,12 @@ function decryptPrivateKey(string $privateKey, string $base64Value): string
 class ScriptArgument
 {
 	/**
+	 * ルートディレクトリパス
+	 *
+	 * @var string
+	 */
+	public $rootDirectoryPath;
+	/**
 	 * 公開ディレクトリパス
 	 *
 	 * @var string
@@ -273,8 +329,9 @@ class ScriptArgument
 	 */
 	public $expandDirectoryPath;
 
-	public function __construct(string $publicDirectoryPath, string $expandDirectoryPath)
+	public function __construct(string $rootDirectoryPath, string $publicDirectoryPath, string $expandDirectoryPath)
 	{
+		$this->rootDirectoryPath = $rootDirectoryPath;
 		$this->publicDirectoryPath = $publicDirectoryPath;
 		$this->expandDirectoryPath = $expandDirectoryPath;
 	}
@@ -322,6 +379,27 @@ class ScriptArgument
 	public function cleanupDirectory(string $directoryPath): void
 	{
 		cleanupDirectory($directoryPath);
+	}
+
+	public function backupFiles(string $archiveFilePath, array $paths) {
+		$zip = new ZipArchive();
+		try {
+			$zip->open($archiveFilePath, ZipArchive::CREATE);
+			foreach ($paths as $path) {
+				$sourcePath = $this->joinPath($this->rootDirectoryPath, $path);
+				if(file_exists($path)) {
+					if(is_dir($path)) {
+						$this->scriptArgument->log('backup: ' . $sourcePath . '/*');
+						//TODO
+					} else {
+						$this->scriptArgument->log('backup: ' . $sourcePath);
+						$zip->addFile($sourcePath, $path);
+					}
+				}
+			}
+		} finally {
+			$zip->close();
+		}
 	}
 }
 
@@ -430,6 +508,7 @@ function sequencePrepare(array $config, array $runningData)
 {
 	outputLog('SEQUENCE_PREPARE');
 
+	//TODO: ハッシュ突合確認
 	if (!isset($_POST[PARAM_ALGORITHM])) {
 		exitAppWithMessage(HTTP_STATUS_SERVER_ERROR, 'アルゴリズム未指定');
 	}
@@ -506,9 +585,8 @@ function sequenceUpdate(array $config, array $runningData)
 		return mb_substr($i, mb_strlen($expandDirPath) + 1);
 	}, $expandFilePaths);
 
-
 	// ユーザースクリプト用データ
-	$scriptArgument = new ScriptArgument($config['PUBLIC_DIR_PATH'], getExpandDirectoryPath());
+	$scriptArgument = new ScriptArgument($config['ROOT_DIR_PATH'], joinPath($config['ROOT_DIR_PATH'], $config['PUBLIC_DIR']), getExpandDirectoryPath());
 	// 前処理スクリプトの実施
 	$beforeScriptPath = joinPath(getExpandDirectoryPath(), $config['BEFORE_SCRIPT']);
 	if (is_file($beforeScriptPath)) {
@@ -534,7 +612,7 @@ function sequenceUpdate(array $config, array $runningData)
 		if (is_dir($src)) {
 			continue;
 		}
-		$dst = joinPath($config['PUBLIC_DIR_PATH'], $expandFileRelativePath);
+		$dst = joinPath($config['ROOT_DIR_PATH'], $config['PUBLIC_DIR'], $expandFileRelativePath);
 		$dir = dirname($dst);
 		if (!is_dir($dir)) {
 			mkdir($dir, 0777, true);
@@ -553,7 +631,7 @@ function sequenceUpdate(array $config, array $runningData)
 	// 退避ファイル補正
 	foreach ($skipFiles as $skipFile) {
 		$src = joinPath($expandDirPath, $skipFile);
-		$dst = joinPath($config['PUBLIC_DIR_PATH'], $skipFile);
+		$dst = joinPath($config['ROOT_DIR_PATH'], $config['PUBLIC_DIR'], $skipFile);
 		copy($src, $dst);
 	}
 
