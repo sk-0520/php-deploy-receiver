@@ -381,14 +381,15 @@ class ScriptArgument
 		cleanupDirectory($directoryPath);
 	}
 
-	public function backupFiles(string $archiveFilePath, array $paths) {
+	public function backupFiles(string $archiveFilePath, array $paths)
+	{
 		$zip = new ZipArchive();
+		$zip->open($archiveFilePath, ZipArchive::CREATE| ZipArchive::OVERWRITE);
 		try {
-			$zip->open($archiveFilePath, ZipArchive::CREATE);
 			foreach ($paths as $path) {
 				$sourcePath = $this->joinPath($this->rootDirectoryPath, $path);
-				if(file_exists($path)) {
-					if(is_dir($path)) {
+				if (file_exists($path)) {
+					if (is_dir($path)) {
 						$this->scriptArgument->log('backup: ' . $sourcePath . '/*');
 						//TODO
 					} else {
@@ -578,65 +579,67 @@ function sequenceUpdate(array $config, array $runningData)
 		exitAppWithMessage(HTTP_STATUS_SERVER_ERROR, 'アクセスキー不正');
 	}
 
-	$expandDirPath = getExpandDirectoryPath();
-	$expandFilePaths = getChildrenFiles($expandDirPath, true);
-	$expandFileRelativePaths = array_map(function ($i) use ($expandDirPath) {
-		outputLog('UPDATE: ' . $i);
-		return mb_substr($i, mb_strlen($expandDirPath) + 1);
-	}, $expandFilePaths);
+	try {
+		$expandDirPath = getExpandDirectoryPath();
+		$expandFilePaths = getChildrenFiles($expandDirPath, true);
+		$expandFileRelativePaths = array_map(function ($i) use ($expandDirPath) {
+			outputLog('UPDATE: ' . $i);
+			return mb_substr($i, mb_strlen($expandDirPath) + 1);
+		}, $expandFilePaths);
 
-	// ユーザースクリプト用データ
-	$scriptArgument = new ScriptArgument($config['ROOT_DIR_PATH'], joinPath($config['ROOT_DIR_PATH'], $config['PUBLIC_DIR']), getExpandDirectoryPath());
-	// 前処理スクリプトの実施
-	$beforeScriptPath = joinPath(getExpandDirectoryPath(), $config['BEFORE_SCRIPT']);
-	if (is_file($beforeScriptPath)) {
-		outputLog('beforeScriptPath: ' . $beforeScriptPath);
-		require_once $beforeScriptPath;
-		call_user_func('before_update', $scriptArgument);
-	}
+		// ユーザースクリプト用データ
+		$scriptArgument = new ScriptArgument($config['ROOT_DIR_PATH'], joinPath($config['ROOT_DIR_PATH'], $config['PUBLIC_DIR']), getExpandDirectoryPath());
+		// 前処理スクリプトの実施
+		$beforeScriptPath = joinPath(getExpandDirectoryPath(), $config['BEFORE_SCRIPT']);
+		if (is_file($beforeScriptPath)) {
+			outputLog('beforeScriptPath: ' . $beforeScriptPath);
+			require_once $beforeScriptPath;
+			call_user_func('before_update', $scriptArgument);
+		}
 
-	//TODO: .htaccess 制御
+		//TODO: .htaccess 制御
 
-	$skipFiles = [];
+		$skipFiles = [];
 
-	// ファイル置き換え
-	foreach ($expandFileRelativePaths as $expandFileRelativePath) {
-		if ($config['SERVER'] === 'apache') {
-			$fileName = basename($expandFileRelativePath);
-			if ($fileName === '.htaccess') {
-				$skipFiles[] = $expandFileRelativePath;
+		// ファイル置き換え
+		foreach ($expandFileRelativePaths as $expandFileRelativePath) {
+			if ($config['SERVER'] === 'apache') {
+				$fileName = basename($expandFileRelativePath);
+				if ($fileName === '.htaccess') {
+					$skipFiles[] = $expandFileRelativePath;
+					continue;
+				}
+			}
+			$src = joinPath($expandDirPath, $expandFileRelativePath);
+			if (is_dir($src)) {
 				continue;
 			}
+			$dst = joinPath($config['ROOT_DIR_PATH'], $config['PUBLIC_DIR'], $expandFileRelativePath);
+			$dir = dirname($dst);
+			if (!is_dir($dir)) {
+				mkdir($dir, 0777, true);
+			}
+			copy($src, $dst);
 		}
-		$src = joinPath($expandDirPath, $expandFileRelativePath);
-		if (is_dir($src)) {
-			continue;
+
+		// 後処理スクリプトの実施
+		$afterScriptPath = joinPath(getExpandDirectoryPath(), $config['AFTER_SCRIPT']);
+		if (is_file($afterScriptPath)) {
+			outputLog('afterScriptPath: ' . $afterScriptPath);
+			require_once $afterScriptPath;
+			call_user_func('after_update', $scriptArgument);
 		}
-		$dst = joinPath($config['ROOT_DIR_PATH'], $config['PUBLIC_DIR'], $expandFileRelativePath);
-		$dir = dirname($dst);
-		if (!is_dir($dir)) {
-			mkdir($dir, 0777, true);
+
+		// 退避ファイル補正
+		foreach ($skipFiles as $skipFile) {
+			$src = joinPath($expandDirPath, $skipFile);
+			$dst = joinPath($config['ROOT_DIR_PATH'], $config['PUBLIC_DIR'], $skipFile);
+			copy($src, $dst);
 		}
-		copy($src, $dst);
+	} finally {
+		// 実行ファイル破棄
+		unlink(getRunningFilePath());
 	}
-
-	// 後処理スクリプトの実施
-	$afterScriptPath = joinPath(getExpandDirectoryPath(), $config['AFTER_SCRIPT']);
-	if (is_file($afterScriptPath)) {
-		outputLog('afterScriptPath: ' . $afterScriptPath);
-		require_once $afterScriptPath;
-		call_user_func('after_update', $scriptArgument);
-	}
-
-	// 退避ファイル補正
-	foreach ($skipFiles as $skipFile) {
-		$src = joinPath($expandDirPath, $skipFile);
-		$dst = joinPath($config['ROOT_DIR_PATH'], $config['PUBLIC_DIR'], $skipFile);
-		copy($src, $dst);
-	}
-
-	// 実行ファイル破棄
-	unlink(getRunningFilePath());
 }
 
 //###########################################################################
