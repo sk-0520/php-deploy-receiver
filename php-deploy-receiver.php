@@ -260,28 +260,68 @@ function decryptPrivateKey(string $privateKey, string $base64Value): string
 // 共通データ -------------------------------
 class ScriptArgument
 {
+	/**
+	 * 公開ディレクトリパス
+	 *
+	 * @var string
+	 */
 	public $publicDirectoryPath;
+	/**
+	 * 展開ディレクトリパス
+	 *
+	 * @var string
+	 */
 	public $expandDirectoryPath;
 
-	public function __construct($publicDirectoryPath, $expandDirectoryPath)
+	public function __construct(string $publicDirectoryPath, string $expandDirectoryPath)
 	{
 		$this->publicDirectoryPath = $publicDirectoryPath;
 		$this->expandDirectoryPath = $expandDirectoryPath;
 	}
 
-	public function log(string $message): void
+	/**
+	 * ログ出力
+	 *
+	 * @param mixed $message
+	 * @return void
+	 */
+	public function log($message): void
 	{
 		outputLog($message, 1);
 	}
 
+	/**
+	 * ファイルパス結合
+	 *
+	 * @param string $basePath
+	 * @param string ...$addPaths
+	 * @return string
+	 */
 	public function joinPath(string $basePath, string ...$addPaths): string
 	{
 		return joinPath($basePath, ...$addPaths);
 	}
 
+	/**
+	 * ディレクトリ削除
+	 *
+	 * @param string $directoryPath
+	 * @return void
+	 */
 	public function removeDirectory(string $directoryPath): void
 	{
 		removeDirectory($directoryPath);
+	}
+
+	/**
+	 * ディレクトリの掃除
+	 *
+	 * @param string $directoryPath
+	 * @return void
+	 */
+	public function cleanupDirectory(string $directoryPath): void
+	{
+		cleanupDirectory($directoryPath);
 	}
 }
 
