@@ -397,12 +397,15 @@ class ScriptArgument
 	{
 		$this->log('backup archive path: ' . $archiveFilePath);
 
-		$zip = new ZipArchive();
-		$zip->open($archiveFilePath, ZipArchive::CREATE | ZipArchive::OVERWRITE);
+		//$zip = new ZipArchive();
+		//$zip->open($archiveFilePath, ZipArchive::CREATE | ZipArchive::OVERWRITE);
+		mkdir($archiveFilePath, 0777, true);
+
 		try {
 			foreach ($paths as $path) {
 				$sourcePath = $this->joinPath($this->rootDirectoryPath, $path);
 				$this->log('backup: ' . $sourcePath);
+				/*
 				if (file_exists($path)) {
 					if (is_dir($path)) {
 						$this->log('backup dirs: ' . $sourcePath . '/*');
@@ -412,9 +415,15 @@ class ScriptArgument
 						$zip->addFile($sourcePath, $path);
 					}
 				}
+				*/
+				$destPath = str_replace(['\\', '.'], '!', $path);
+				if (is_dir($sourcePath)) {
+				} else {
+					copy($sourcePath, $destPath, null);
+				}
 			}
 		} finally {
-			$zip->close();
+			//$zip->close();
 		}
 	}
 }
