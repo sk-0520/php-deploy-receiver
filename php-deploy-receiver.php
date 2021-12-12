@@ -395,17 +395,20 @@ class ScriptArgument
 
 	public function backupFiles(string $archiveFilePath, array $paths)
 	{
+		$this->log('backup archive path: ' . $archiveFilePath);
+
 		$zip = new ZipArchive();
 		$zip->open($archiveFilePath, ZipArchive::CREATE | ZipArchive::OVERWRITE);
 		try {
 			foreach ($paths as $path) {
 				$sourcePath = $this->joinPath($this->rootDirectoryPath, $path);
+				$this->log('backup: ' . $sourcePath);
 				if (file_exists($path)) {
 					if (is_dir($path)) {
-						$this->scriptArgument->log('backup: ' . $sourcePath . '/*');
+						$this->log('backup dirs: ' . $sourcePath . '/*');
 						//TODO
 					} else {
-						$this->scriptArgument->log('backup: ' . $sourcePath);
+						$this->log('backup file: ' . $sourcePath);
 						$zip->addFile($sourcePath, $path);
 					}
 				}
@@ -746,6 +749,6 @@ function main()
 	}
 }
 
-if(!defined('NO_DEPLOY_START')) {
+if (!defined('NO_DEPLOY_START')) {
 	main();
 }
