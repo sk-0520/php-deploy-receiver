@@ -58,7 +58,7 @@ function isNullOrWhiteSpace(?string $s): bool
 	return strlen(trim($s)) === 0;
 }
 
-function getAbsolutePath(string $path)
+function toCanonicalize(string $path)
 {
 	$targetPath = str_replace(['/', '\\'], DIRECTORY_SEPARATOR, $path);
 	$parts = array_filter(explode(DIRECTORY_SEPARATOR, $targetPath), 'mb_strlen');
@@ -101,7 +101,7 @@ function joinPath(string $basePath, string ...$addPaths): string
 
 
 	$joinedPath = implode(DIRECTORY_SEPARATOR, $paths);
-	return getAbsolutePath($joinedPath);
+	return toCanonicalize($joinedPath);
 }
 
 function getLogFilePath(): string
