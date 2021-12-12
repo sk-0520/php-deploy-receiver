@@ -2,6 +2,13 @@
 
 declare(strict_types=1);
 
+namespace pdr;
+
+use \DateTime;
+use \DateInterval;
+use \Exception;
+use \ZipArchive;
+
 require __DIR__ . '/config.php';
 
 define('HTTP_STATUS_NOT_FOUND', 404);
