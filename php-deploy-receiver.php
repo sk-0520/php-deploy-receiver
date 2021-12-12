@@ -328,12 +328,17 @@ class ScriptArgument
 	 * @var string
 	 */
 	public $expandDirectoryPath;
+	/**
+	 * 設定
+	 */
+	public $config;
 
-	public function __construct(string $rootDirectoryPath, string $publicDirectoryPath, string $expandDirectoryPath)
+	public function __construct(string $rootDirectoryPath, string $publicDirectoryPath, string $expandDirectoryPath, array $config)
 	{
 		$this->rootDirectoryPath = $rootDirectoryPath;
 		$this->publicDirectoryPath = $publicDirectoryPath;
 		$this->expandDirectoryPath = $expandDirectoryPath;
+		$this->config = $config;
 	}
 
 	/**
@@ -384,7 +389,7 @@ class ScriptArgument
 	public function backupFiles(string $archiveFilePath, array $paths)
 	{
 		$zip = new ZipArchive();
-		$zip->open($archiveFilePath, ZipArchive::CREATE| ZipArchive::OVERWRITE);
+		$zip->open($archiveFilePath, ZipArchive::CREATE | ZipArchive::OVERWRITE);
 		try {
 			foreach ($paths as $path) {
 				$sourcePath = $this->joinPath($this->rootDirectoryPath, $path);
@@ -588,7 +593,7 @@ function sequenceUpdate(array $config, array $runningData)
 		}, $expandFilePaths);
 
 		// ユーザースクリプト用データ
-		$scriptArgument = new ScriptArgument($config['ROOT_DIR_PATH'], joinPath($config['ROOT_DIR_PATH'], $config['PUBLIC_DIR']), getExpandDirectoryPath());
+		$scriptArgument = new ScriptArgument($config['ROOT_DIR_PATH'], joinPath($config['ROOT_DIR_PATH'], $config['PUBLIC_DIR']), getExpandDirectoryPath(), $config);
 		// 前処理スクリプトの実施
 		$beforeScriptPath = joinPath(getExpandDirectoryPath(), $config['BEFORE_SCRIPT']);
 		if (is_file($beforeScriptPath)) {
