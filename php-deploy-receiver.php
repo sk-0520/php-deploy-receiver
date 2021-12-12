@@ -416,11 +416,6 @@ class ScriptArgument
 					}
 				}
 				*/
-				$destPath = str_replace(['\\', '.'], '!', $path);
-				if (is_dir($sourcePath)) {
-				} else {
-					copy($sourcePath, $destPath);
-				}
 			}
 		} finally {
 			//$zip->close();
