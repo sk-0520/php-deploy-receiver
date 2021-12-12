@@ -746,4 +746,6 @@ function main()
 	}
 }
 
-main();
+if(!defined('NO_DEPLOY_START')) {
+	main();
+}
