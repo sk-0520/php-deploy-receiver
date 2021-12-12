@@ -419,7 +419,7 @@ class ScriptArgument
 				$destPath = str_replace(['\\', '.'], '!', $path);
 				if (is_dir($sourcePath)) {
 				} else {
-					copy($sourcePath, $destPath, null);
+					copy($sourcePath, $destPath);
 				}
 			}
 		} finally {
