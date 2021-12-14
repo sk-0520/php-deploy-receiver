@@ -6,8 +6,10 @@ namespace Deploy;
 
 use \DateTime;
 use \DateInterval;
-use \Exception;
 use \ZipArchive;
+use \Exception;
+use \Error;
+use \Throwable;
 
 require __DIR__ . '/config.php';
 
@@ -34,103 +36,34 @@ const PARAM_ALGORITHM = 'algorithm';
 const PARAM_HASH = 'hash';
 
 //###########################################################################
-// 共通関数 -------------------------------
-
-function isNullOrEmpty(?string $s): bool
-{
-	if (is_null($s)) {
-		return true;
-	}
-
-	if ($s === '0') {
-		return false;
-	}
-
-	return empty($s);
-}
-
-function isNullOrWhiteSpace(?string $s): bool
-{
-	if (isNullOrEmpty($s)) {
-		return true;
-	}
-
-	return strlen(trim($s)) === 0;
-}
-
-function toCanonicalize(string $path)
-{
-	$targetPath = str_replace(['/', '\\'], DIRECTORY_SEPARATOR, $path);
-	$parts = array_filter(explode(DIRECTORY_SEPARATOR, $targetPath), 'mb_strlen');
-	$absolutes = array();
-	foreach ($parts as $part) {
-		if ($part === '.') {
-			continue;
-		}
-		if ($part === '..') {
-			array_pop($absolutes);
-		} else {
-			$absolutes[] = $part;
-		}
-	}
-
-	$result = implode(DIRECTORY_SEPARATOR, $absolutes);
-	if (mb_strlen($targetPath) && $targetPath[0] === DIRECTORY_SEPARATOR) {
-		$result = DIRECTORY_SEPARATOR . $result;
-	}
-
-	return $result;
-}
-/**
- * ファイルパス結合
- *
- * 別リポジトリの PeServer\FileUtility::join が正
- *
- * @param string $basePath ベースパス
- * @param string ...$addPaths 結合するパス
- * @return string 結合されたファイルパス
- */
-function joinPath(string $basePath, string ...$addPaths): string
-{
-	$paths = array_merge([$basePath], array_map(function ($s) {
-		return trim($s, '/\\');
-	}, $addPaths));
-	$paths = array_filter($paths, function ($v, $k) {
-		return !isNullOrEmpty($v) && ($k === 0 ? true :  $v !== '/' && $v !== '\\');
-	}, ARRAY_FILTER_USE_BOTH);
-
-
-	$joinedPath = implode(DIRECTORY_SEPARATOR, $paths);
-	return toCanonicalize($joinedPath);
-}
 
 function getLogFilePath(): string
 {
-	$path = joinPath(__DIR__, 'deploy.log');
+	$path = FileUtility::joinPath(__DIR__, 'deploy.log');
 	return $path;
 }
 
 function getRunningFilePath(): string
 {
-	$path = joinPath(__DIR__, 'running.json');
+	$path = FileUtility::joinPath(__DIR__, 'running.json');
 	return $path;
 }
 
 function getReceiveDirectoryPath(): string
 {
-	$path = joinPath(__DIR__, 'recv');
+	$path = FileUtility::joinPath(__DIR__, 'recv');
 	return $path;
 }
 
 function getExpandDirectoryPath(): string
 {
-	$path = joinPath(__DIR__, 'expand');
+	$path = FileUtility::joinPath(__DIR__, 'expand');
 	return $path;
 }
 
 function getArchiveFilePath(): string
 {
-	$path = joinPath(getReceiveDirectoryPath(), '0.zip');
+	$path = FileUtility::joinPath(getReceiveDirectoryPath(), '0.zip');
 	return $path;
 }
 
@@ -222,47 +155,6 @@ function exitOutput(int $httpStatusCode, string $contentType, $content)
 	header('Content-Type: ' . $contentType);
 	echo $content;
 	exit;
-}
-
-function removeDirectory(string $directoryPath): void
-{
-	$files = getChildrenFiles($directoryPath, false);
-	foreach ($files as $file) {
-		if (is_dir($file)) {
-			removeDirectory($file);
-		} else {
-			unlink($file);
-		}
-	}
-	rmdir($directoryPath);
-}
-
-function cleanupDirectory(string $directoryPath): void
-{
-	if (is_dir($directoryPath)) {
-		removeDirectory($directoryPath);
-	}
-	mkdir($directoryPath, 0777, true);
-}
-
-function getChildrenFiles(string $directoryPath, bool $recursive): array
-{
-	$files = [];
-	$items = scandir($directoryPath);
-	foreach ($items as $item) {
-		if ($item === '.' || $item === '..') {
-			continue;
-		}
-		$path = joinPath($directoryPath, $item);
-
-		if ($recursive && is_dir($path)) {
-			$files = array_merge($files, getChildrenFiles($path, $recursive));
-		} else {
-			$files[] = joinPath($directoryPath, $item);
-		}
-	}
-
-	return $files;
 }
 
 /**
@@ -368,7 +260,7 @@ class ScriptArgument
 	 */
 	public function joinPath(string $basePath, string ...$addPaths): string
 	{
-		return joinPath($basePath, ...$addPaths);
+		return FileUtility::joinPath($basePath, ...$addPaths);
 	}
 
 	/**
@@ -379,7 +271,7 @@ class ScriptArgument
 	 */
 	public function removeDirectory(string $directoryPath): void
 	{
-		removeDirectory($directoryPath);
+		FileUtility::removeDirectory($directoryPath);
 	}
 
 	/**
@@ -390,7 +282,7 @@ class ScriptArgument
 	 */
 	public function cleanupDirectory(string $directoryPath): void
 	{
-		cleanupDirectory($directoryPath);
+		FileUtility::cleanupDirectory($directoryPath);
 	}
 
 	public function backupFiles(string $archiveFilePath, array $paths)
@@ -486,7 +378,7 @@ function sequenceInitialize(array $config, array $runningData)
 		getExpandDirectoryPath(),
 	];
 	foreach ($dirs as $dir) {
-		cleanupDirectory($dir);
+		FileUtility::cleanupDirectory($dir);
 	}
 
 	exitOutput(200, 'text/plain', strval(SEQUENCE_INITIALIZE));
@@ -513,7 +405,7 @@ function sequenceReceive(array $config, array $runningData)
 	}
 
 	$recvDirPath = getReceiveDirectoryPath();
-	$recvFilePath = joinPath($recvDirPath, sprintf('%08d.part', $number));
+	$recvFilePath = FileUtility::joinPath($recvDirPath, sprintf('%08d.part', $number));
 	$tempFilePath = $_FILES[PARAM_UPLOAD_FILE]['tmp_name'];
 
 	outputLog('part: ' . $tempFilePath);
@@ -544,7 +436,7 @@ function sequencePrepare(array $config, array $runningData)
 	outputLog('受信ファイル結合');
 
 	$recvDirPath = getReceiveDirectoryPath();
-	$pattern = joinPath($recvDirPath, '*.part');
+	$pattern = FileUtility::joinPath($recvDirPath, '*.part');
 	$recvFilePaths = glob($pattern);
 
 	$archiveFilePath = getArchiveFilePath();
@@ -575,7 +467,7 @@ function sequencePrepare(array $config, array $runningData)
 	$zip->extractTo($expandDirPath);
 	$zip->close();
 
-	$expandFilePaths = getChildrenFiles($expandDirPath, true);
+	$expandFilePaths = FileUtility::getFiles($expandDirPath, true);
 	foreach ($expandFilePaths as $expandFilePath) {
 		outputLog('path: ' . $expandFilePath);
 		outputLog('size: ' . filesize($expandFilePath));
@@ -600,16 +492,16 @@ function sequenceUpdate(array $config, array $runningData)
 
 	try {
 		$expandDirPath = getExpandDirectoryPath();
-		$expandFilePaths = getChildrenFiles($expandDirPath, true);
+		$expandFilePaths = FileUtility::getFiles($expandDirPath, true);
 		$expandFileRelativePaths = array_map(function ($i) use ($expandDirPath) {
 			outputLog('UPDATE: ' . $i);
 			return mb_substr($i, mb_strlen($expandDirPath) + 1);
 		}, $expandFilePaths);
 
 		// ユーザースクリプト用データ
-		$scriptArgument = new ScriptArgument($config['ROOT_DIR_PATH'], joinPath($config['ROOT_DIR_PATH'], $config['PUBLIC_DIR']), getExpandDirectoryPath(), $config);
+		$scriptArgument = new ScriptArgument($config['ROOT_DIR_PATH'], FileUtility::joinPath($config['ROOT_DIR_PATH'], $config['PUBLIC_DIR']), getExpandDirectoryPath(), $config);
 		// 前処理スクリプトの実施
-		$beforeScriptPath = joinPath(getExpandDirectoryPath(), $config['BEFORE_SCRIPT']);
+		$beforeScriptPath = FileUtility::joinPath(getExpandDirectoryPath(), $config['BEFORE_SCRIPT']);
 		if (is_file($beforeScriptPath)) {
 			outputLog('beforeScriptPath: ' . $beforeScriptPath);
 			require_once $beforeScriptPath;
@@ -629,11 +521,11 @@ function sequenceUpdate(array $config, array $runningData)
 					continue;
 				}
 			}
-			$src = joinPath($expandDirPath, $expandFileRelativePath);
+			$src = FileUtility::joinPath($expandDirPath, $expandFileRelativePath);
 			if (is_dir($src)) {
 				continue;
 			}
-			$dst = joinPath($config['ROOT_DIR_PATH'], $config['PUBLIC_DIR'], $expandFileRelativePath);
+			$dst = FileUtility::joinPath($config['ROOT_DIR_PATH'], $config['PUBLIC_DIR'], $expandFileRelativePath);
 			$dir = dirname($dst);
 			if (!is_dir($dir)) {
 				mkdir($dir, 0777, true);
@@ -642,7 +534,7 @@ function sequenceUpdate(array $config, array $runningData)
 		}
 
 		// 後処理スクリプトの実施
-		$afterScriptPath = joinPath(getExpandDirectoryPath(), $config['AFTER_SCRIPT']);
+		$afterScriptPath = FileUtility::joinPath(getExpandDirectoryPath(), $config['AFTER_SCRIPT']);
 		if (is_file($afterScriptPath)) {
 			outputLog('afterScriptPath: ' . $afterScriptPath);
 			require_once $afterScriptPath;
@@ -651,8 +543,8 @@ function sequenceUpdate(array $config, array $runningData)
 
 		// 退避ファイル補正
 		foreach ($skipFiles as $skipFile) {
-			$src = joinPath($expandDirPath, $skipFile);
-			$dst = joinPath($config['ROOT_DIR_PATH'], $config['PUBLIC_DIR'], $skipFile);
+			$src = FileUtility::joinPath($expandDirPath, $skipFile);
+			$dst = FileUtility::joinPath($config['ROOT_DIR_PATH'], $config['PUBLIC_DIR'], $skipFile);
 			copy($src, $dst);
 		}
 	} finally {
@@ -757,4 +649,303 @@ if (!defined('NO_DEPLOY_START')) {
 	main();
 }
 
-//IMPORT!!
+
+
+
+
+
+
+
+
+//AUTO-GEN------------------------------------------------------------------------
+//AUTO-GEN-SETTING:FILE:PeServer/Core/Throws/CoreError.php
+//AUTO-GEN-SETTING:FILE:PeServer/Core/Throws/CoreException.php
+//AUTO-GEN-SETTING:FILE:PeServer/Core/Throws/FileNotFoundException.php
+//AUTO-GEN-SETTING:FILE:PeServer/Core/Throws/ParseException.php
+//AUTO-GEN-SETTING:FILE:PeServer/Core/StringUtility.php
+//AUTO-GEN-SETTING:FILE:PeServer/Core/FileUtility.php
+
+
+
+//AUTO-GEN-CODE
+class CoreError extends Error
+{
+	public function __construct(string $message = "", int $code = 0, ?Throwable $previous = null)
+	{
+		parent::__construct($message, $code, $previous);
+	}
+}
+class CoreException extends Exception
+{
+	public function __construct(string $message = "", int $code = 0, ?Throwable $previous = null)
+	{
+		parent::__construct($message, $code, $previous);
+	}
+}
+class FileNotFoundException extends CoreException
+{
+	public function __construct(string $message = "", int $code = 0, ?Throwable $previous = null)
+	{
+		parent::__construct($message, $code, $previous);
+	}
+}
+class ParseException extends CoreException
+{
+	public function __construct(string $message = "", int $code = 0, ?Throwable $previous = null)
+	{
+		parent::__construct($message, $code, $previous);
+	}
+}
+class StringUtility
+{
+	/**
+	 * 文字列がnullか空か
+	 *
+	 * @param string|null $s
+	 * @return boolean
+	 */
+	public static function isNullOrEmpty(?string $s): bool
+	{
+		if (is_null($s)) {
+			return true;
+		}
+		if ($s === '0') {
+			return false;
+		}
+		return empty($s);
+	}
+	/**
+	 * 文字列がnullかホワイトスペースのみで構築されているか
+	 *
+	 * @param string|null $s
+	 * @return boolean
+	 */
+	public static function isNullOrWhiteSpace(?string $s): bool
+	{
+		if (self::isNullOrEmpty($s)) {
+			return true;
+		}
+		return strlen(trim($s)) === 0;
+	}
+	/**
+	 * プレースホルダー文字列置き換え処理
+	 *
+	 * @param string $source 元文字列
+	 * @param array<string,string> $map 置き換え対象辞書
+	 * @param string $head
+	 * @param string $tail
+	 * @return string 置き換え後文字列
+	 */
+	public static function replaceMap(string $source, array $map, string $head = '{', string $tail = '}'): string
+	{
+		$escHead = preg_quote($head);
+		$escTail = preg_quote($tail);
+		$pattern = "/$escHead(.+?)$escTail/";
+		return preg_replace_callback(
+			$pattern,
+			function ($matches) use ($map) {
+				if (isset($map[$matches[1]])) {
+					return $map[$matches[1]];
+				}
+				return '';
+			},
+			$source
+		);
+	}
+	public static function startsWith(string $haystack, string $needle, bool $ignoreCase): bool
+	{
+		//PHP8
+		//str_starts_with($haystack, $needle);
+		if (self::isNullOrEmpty($needle)) {
+			return true;
+		}
+		if (strlen($haystack) < strlen($needle)) {
+			return false;
+		}
+		$word = mb_substr($haystack, 0, mb_strlen($needle));
+		if ($ignoreCase) {
+			return !strcasecmp($needle, $word);
+		}
+		return $needle === $word;
+	}
+	public static function endsWith(string $haystack, string $needle, bool $ignoreCase): bool
+	{
+		//PHP8
+		//str_ends_with($haystack, $needle);
+		if (self::isNullOrEmpty($needle)) {
+			return true;
+		}
+		if (strlen($haystack) < strlen($needle)) {
+			return false;
+		}
+		$word = mb_substr($haystack, mb_strlen($haystack) - mb_strlen($needle));
+		if ($ignoreCase) {
+			return !strcasecmp($needle, $word);
+		}
+		return $needle === $word;
+	}
+	public static function contains(string $haystack, string $needle, bool $ignoreCase): bool
+	{
+		//PHP8
+		//str_contains
+		if (self::isNullOrEmpty($needle)) {
+			return true;
+		}
+		if (strlen($haystack) < strlen($needle)) {
+			return false;
+		}
+		if ($ignoreCase) {
+			return stripos($haystack, $needle) !== false;
+		}
+		return strpos($haystack, $needle) !== false;
+	}
+}
+class FileUtility
+{
+	/**
+	 * 絶対パスへ変換。
+	 *
+	 * @param string $path パス。
+	 * @return string 絶対パス。
+	 */
+	public static function toCanonicalize(string $path): string
+	{
+		$targetPath = str_replace(['/', '\\'], DIRECTORY_SEPARATOR, $path);
+		$parts = array_filter(explode(DIRECTORY_SEPARATOR, $targetPath), 'mb_strlen');
+		$absolutes = array();
+		foreach ($parts as $part) {
+			if ($part === '.') {
+				continue;
+			}
+			if ($part === '..') {
+				array_pop($absolutes);
+			} else {
+				$absolutes[] = $part;
+			}
+		}
+		$result = implode(DIRECTORY_SEPARATOR, $absolutes);
+		if (mb_strlen($targetPath) && $targetPath[0] === DIRECTORY_SEPARATOR) {
+			$result = DIRECTORY_SEPARATOR . $result;
+		}
+		return $result;
+	}
+	/**
+	 * パスの結合。
+	 *
+	 * @param string $basePath ベースとなるパス。
+	 * @param string ...$addPaths 連結していくパス。
+	 * @return string 結合後のパス。正規化される。
+	 */
+	public static function joinPath(string $basePath, string ...$addPaths): string
+	{
+		$paths = array_merge([$basePath], array_map(function ($s) {
+			return trim($s, '/\\');
+		}, $addPaths));
+		$paths = array_filter($paths, function ($v, $k) {
+			return !StringUtility::isNullOrEmpty($v) && ($k === 0 ? true :  $v !== '/' && $v !== '\\');
+		}, ARRAY_FILTER_USE_BOTH);
+		$joinedPath = implode(DIRECTORY_SEPARATOR, $paths);
+		return self::toCanonicalize($joinedPath);
+	}
+	/**
+	 * JSONとしてファイル読み込み
+	 *
+	 * @param string $path パス
+	 * @param boolean $associative 連想配列として扱うか
+	 * @return array|\stdClass 応答JSON
+	 */
+	public static function readJsonFile(string $path, bool $associative = true)
+	{
+		$content = file_get_contents($path);
+		if ($content === false) {
+			throw new FileNotFoundException($path);
+		}
+		$json = json_decode($content, $associative);
+		if (is_null($json)) {
+			throw new ParseException($path);
+		}
+		return $json;
+	}
+	/**
+	 * ディレクトリが存在しない場合に作成する。
+	 *
+	 * ディレクトリは再帰的に作成される。
+	 *
+	 * @param string $directoryPath ディレクトリパス
+	 * @return void
+	 */
+	public static function createDirectoryIfNotExists(string $directoryPath)
+	{
+		if (!file_exists($directoryPath)) {
+			mkdir($directoryPath, 0777, true);
+		}
+	}
+	/**
+	 * 対象パスの親ディレクトリが存在しない場合に親ディレクトリを作成する。
+	 *
+	 * ディレクトリは再帰的に作成される。
+	 *
+	 * @param string $path 対象パス（メソッド自体はファイルパスとして使用することを前提としている）
+	 * @return void
+	 */
+	public static function createParentDirectoryIfNotExists(string $path)
+	{
+		self::createDirectoryIfNotExists(dirname($path));
+	}
+	/**
+	 * ファイル一覧を取得する。
+	 *
+	 * @param string $directoryPath ディレクトリパス。
+	 * @param boolean $recursive 再帰的に取得するか。
+	 * @return string[] ファイル一覧。
+	 */
+	public static function getFiles(string $directoryPath, bool $recursive): array
+	{
+		$files = [];
+		$items = scandir($directoryPath);
+		foreach ($items as $item) {
+			if ($item === '.' || $item === '..') {
+				continue;
+			}
+			$path = self::joinPath($directoryPath, $item);
+			if ($recursive && is_dir($path)) {
+				$files = array_merge($files, self::getFiles($path, $recursive));
+			} else {
+				$files[] = self::joinPath($directoryPath, $item);
+			}
+		}
+		return $files;
+	}
+	/**
+	 * ディレクトリを削除する。
+	 * ファイル・ディレクトリはすべて破棄される。
+	 *
+	 * @param string $directoryPath 削除ディレクトリ。
+	 * @return void
+	 */
+	public static function removeDirectory(string $directoryPath): void
+	{
+		$files = self::getFiles($directoryPath, false);
+		foreach ($files as $file) {
+			if (is_dir($file)) {
+				self::removeDirectory($file);
+			} else {
+				unlink($file);
+			}
+		}
+		rmdir($directoryPath);
+	}
+	/**
+	 * ディレクトリを破棄・作成する
+	 *
+	 * @param string $directoryPath 対象ディレクトリ。
+	 * @return void
+	 */
+	public static function cleanupDirectory(string $directoryPath): void
+	{
+		if (is_dir($directoryPath)) {
+			self::removeDirectory($directoryPath);
+		}
+		mkdir($directoryPath, 0777, true);
+	}
+}
