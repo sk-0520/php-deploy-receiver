@@ -476,6 +476,11 @@ function sequenceUpdate(array $config, array $runningData)
 			return mb_substr($i, mb_strlen($expandDirPath) + 1);
 		}, $expandFilePaths);
 
+		outputLog('expandFileRelativePaths.count: ' . count($expandFileRelativePaths));
+		foreach($expandFileRelativePaths as $expandFileRelativePath) {
+			outputLog('expandFileRelativePath: ' . $expandFileRelativePath);
+		}
+
 		// ユーザースクリプト用データ
 		$scriptArgument = new ScriptArgument($config['ROOT_DIR_PATH'], FileUtility::joinPath($config['ROOT_DIR_PATH'], $config['PUBLIC_DIR']), getExpandDirectoryPath(), $config);
 		// 前処理スクリプトの実施
@@ -508,6 +513,8 @@ function sequenceUpdate(array $config, array $runningData)
 			if (!is_dir($dir)) {
 				mkdir($dir, 0777, true);
 			}
+
+			outputLog("COPY: $src -> $dst");
 			copy($src, $dst);
 		}
 
