@@ -37,31 +37,31 @@ const PARAM_HASH = 'hash';
 
 //###########################################################################
 
-function getLogFilePath(): string
+function getLogFilePath()
 {
 	$path = FileUtility::joinPath(__DIR__, 'deploy.log');
 	return $path;
 }
 
-function getRunningFilePath(): string
+function getRunningFilePath()
 {
 	$path = FileUtility::joinPath(__DIR__, 'running.json');
 	return $path;
 }
 
-function getReceiveDirectoryPath(): string
+function getReceiveDirectoryPath()
 {
 	$path = FileUtility::joinPath(__DIR__, 'recv');
 	return $path;
 }
 
-function getExpandDirectoryPath(): string
+function getExpandDirectoryPath()
 {
 	$path = FileUtility::joinPath(__DIR__, 'expand');
 	return $path;
 }
 
-function getArchiveFilePath(): string
+function getArchiveFilePath()
 {
 	$path = FileUtility::joinPath(getReceiveDirectoryPath(), '0.zip');
 	return $path;
@@ -90,7 +90,7 @@ function outputLog($message)
 	file_put_contents($path, $logItem . PHP_EOL, FILE_APPEND | LOCK_EX);
 }
 
-function loadRunningFile(string $filePath): ?array
+function loadRunningFile($filePath)
 {
 	$content = file_get_contents($filePath);
 	if ($content === false) {
@@ -100,13 +100,13 @@ function loadRunningFile(string $filePath): ?array
 	return json_decode($content, true);
 }
 
-function saveRunningFile(string $runningFilePath, array $runningData)
+function saveRunningFile($runningFilePath, $runningData)
 {
 	$jsonString = json_encode($runningData);
 	file_put_contents($runningFilePath, $jsonString, LOCK_EX);
 }
 
-function isEnabledLifeTime(string $tokenExpiration, array $runningData): bool
+function isEnabledLifeTime($tokenExpiration, $runningData)
 {
 	$timestamp = new DateTime($runningData['TIMESTAMP']);
 	$limitTimestamp = $timestamp->add(new DateInterval($tokenExpiration));
@@ -115,12 +115,12 @@ function isEnabledLifeTime(string $tokenExpiration, array $runningData): bool
 	return $nowTimestamp <= $limitTimestamp;
 }
 
-function isEnabledToken(string $accessToken, array $runningData): bool
+function isEnabledToken($accessToken, $runningData)
 {
 	return $accessToken === $runningData['ACCESS_TOKEN'];
 }
 
-function exitApp(int $httpStatusCode)
+function exitApp($httpStatusCode)
 {
 	outputLog($httpStatusCode);
 
@@ -129,7 +129,7 @@ function exitApp(int $httpStatusCode)
 	exit;
 }
 
-function exitAppWithMessage(int $httpStatusCode, ?string $content = null)
+function exitAppWithMessage($httpStatusCode, $content = null)
 {
 	if (is_null($content)) {
 		outputLog($httpStatusCode);
@@ -147,7 +147,7 @@ function exitAppWithMessage(int $httpStatusCode, ?string $content = null)
 	exit;
 }
 
-function exitOutput(int $httpStatusCode, string $contentType, $content)
+function exitOutput($httpStatusCode, $contentType,$content)
 {
 	outputLog($httpStatusCode);
 
@@ -164,7 +164,7 @@ function exitOutput(int $httpStatusCode, string $contentType, $content)
  *
  * @param array $config
  */
-function initializeOpenSsl(?array $config): void
+function initializeOpenSsl($config)
 {
 	/*
 	$openssl = openssl_pkey_new($config);
@@ -182,7 +182,7 @@ function initializeOpenSsl(?array $config): void
  *
  * @return string 暗号化されたbase64文字列
  */
-function encryptPublicKey(string $publicKey, string $source): string
+function encryptPublicKey($publicKey, $source)
 {
 	openssl_public_encrypt($source, $rawData, $publicKey);
 	return base64_encode($rawData);
@@ -197,7 +197,7 @@ function encryptPublicKey(string $publicKey, string $source): string
  *
  * @return string 復号された文字列
  */
-function decryptPrivateKey(string $privateKey, string $base64Value): string
+function decryptPrivateKey($privateKey, $base64Value)
 {
 	$encValue = base64_decode($base64Value);
 	if (!openssl_private_decrypt($encValue, $rawValue, $privateKey)) {
@@ -232,7 +232,7 @@ class ScriptArgument
 	 */
 	public $config;
 
-	public function __construct(string $rootDirectoryPath, string $publicDirectoryPath, string $expandDirectoryPath, array $config)
+	public function __construct($rootDirectoryPath, $publicDirectoryPath, $expandDirectoryPath, $config)
 	{
 		$this->rootDirectoryPath = $rootDirectoryPath;
 		$this->publicDirectoryPath = $publicDirectoryPath;
@@ -246,7 +246,7 @@ class ScriptArgument
 	 * @param mixed $message
 	 * @return void
 	 */
-	public function log($message): void
+	public function log($message)
 	{
 		outputLog($message, 1);
 	}
@@ -258,7 +258,7 @@ class ScriptArgument
 	 * @param string ...$addPaths
 	 * @return string
 	 */
-	public function joinPath(string $basePath, string ...$addPaths): string
+	public function joinPath($basePath, string ...$addPaths)
 	{
 		return FileUtility::joinPath($basePath, ...$addPaths);
 	}
@@ -269,7 +269,7 @@ class ScriptArgument
 	 * @param string $directoryPath
 	 * @return void
 	 */
-	public function removeDirectory(string $directoryPath): void
+	public function removeDirectory($directoryPath)
 	{
 		FileUtility::removeDirectory($directoryPath);
 	}
@@ -280,12 +280,12 @@ class ScriptArgument
 	 * @param string $directoryPath
 	 * @return void
 	 */
-	public function cleanupDirectory(string $directoryPath): void
+	public function cleanupDirectory($directoryPath)
 	{
 		FileUtility::cleanupDirectory($directoryPath);
 	}
 
-	public function backupFiles(string $archiveFilePath, array $paths)
+	public function backupFiles($archiveFilePath, $paths)
 	{
 		$this->log('backup archive path: ' . $archiveFilePath);
 
@@ -295,7 +295,7 @@ class ScriptArgument
 
 //###########################################################################
 // 各シーケンス -------------------------------
-function sequenceHello(array $config)
+function sequenceHello($config)
 {
 	outputLog('SEQUENCE_HELLO');
 
@@ -335,7 +335,7 @@ function sequenceHello(array $config)
 	exitOutput(200, 'text/plain', $result);
 }
 
-function sequenceInitialize(array $config, array $runningData)
+function sequenceInitialize($config, $runningData)
 {
 	outputLog('SEQUENCE_INITIALIZE');
 
@@ -362,7 +362,7 @@ function sequenceInitialize(array $config, array $runningData)
 	exitOutput(200, 'text/plain', strval(SEQUENCE_INITIALIZE));
 }
 
-function sequenceReceive(array $config, array $runningData)
+function sequenceReceive($config, $runningData)
 {
 	outputLog('SEQUENCE_RECEIVE');
 
@@ -394,7 +394,7 @@ function sequenceReceive(array $config, array $runningData)
 	copy($tempFilePath, $recvFilePath);
 }
 
-function sequencePrepare(array $config, array $runningData)
+function sequencePrepare($config, $runningData)
 {
 	outputLog('SEQUENCE_PREPARE');
 
@@ -452,7 +452,7 @@ function sequencePrepare(array $config, array $runningData)
 	}
 }
 
-function sequenceUpdate(array $config, array $runningData)
+function sequenceUpdate($config, $runningData)
 {
 	outputLog('SEQUENCE_UPDATE');
 
@@ -471,7 +471,7 @@ function sequenceUpdate(array $config, array $runningData)
 	try {
 		$expandDirPath = getExpandDirectoryPath();
 		$expandFilePaths = FileUtility::getFiles($expandDirPath, true);
-		$expandFileRelativePaths = array_map(function ($i) use ($expandDirPath) {
+$expandFileRelativePaths = array_map(function ($i) use ($expandDirPath) {
 			outputLog('UPDATE: ' . $i);
 			return mb_substr($i, mb_strlen($expandDirPath) + 1);
 		}, $expandFilePaths);
@@ -647,6 +647,7 @@ if (!defined('NO_DEPLOY_START')) {
 //AUTO-GEN-SETTING:FILE:PeServer/Core/Throws/CoreException.php
 //AUTO-GEN-SETTING:FILE:PeServer/Core/Throws/FileNotFoundException.php
 //AUTO-GEN-SETTING:FILE:PeServer/Core/Throws/ParseException.php
+//AUTO-GEN-SETTING:FILE:PeServer/Core/Throws/ArgumentException.php
 //AUTO-GEN-SETTING:FILE:PeServer/Core/StringUtility.php
 //AUTO-GEN-SETTING:FILE:PeServer/Core/FileUtility.php
 
@@ -657,41 +658,49 @@ if (!defined('NO_DEPLOY_START')) {
 //AUTO-GEN-CODE
 class CoreError extends Error
 {
-	public function __construct(string $message = "", int $code = 0, ?Throwable $previous = null)
+	public function __construct($message = "", $code = 0, $previous = null)
 	{
 		parent::__construct($message, $code, $previous);
 	}
 }
 class CoreException extends Exception
 {
-	public function __construct(string $message = "", int $code = 0, ?Throwable $previous = null)
+	public function __construct($message = "", $code = 0, $previous = null)
 	{
 		parent::__construct($message, $code, $previous);
 	}
 }
-class FileNotFoundException extends CoreException
+class FileNotFoundException extends IOException
 {
-	public function __construct(string $message = "", int $code = 0, ?Throwable $previous = null)
+	public function __construct($message = "", $code = 0, $previous = null)
 	{
 		parent::__construct($message, $code, $previous);
 	}
 }
 class ParseException extends CoreException
 {
-	public function __construct(string $message = "", int $code = 0, ?Throwable $previous = null)
+	public function __construct($message = "", $code = 0, $previous = null)
 	{
 		parent::__construct($message, $code, $previous);
 	}
 }
-class StringUtility
+class ArgumentException extends CoreException
 {
+	public function __construct($message = "", $code = 0, $previous = null)
+	{
+		parent::__construct($message, $code, $previous);
+	}
+}
+abstract class StringUtility
+{
+	public const TRIM_CHARACTERS = " \n\r\t\v\0";
 	/**
 	 * 文字列がnullか空か
 	 *
 	 * @param string|null $s
 	 * @return boolean
 	 */
-	public static function isNullOrEmpty(?string $s): bool
+	public static function isNullOrEmpty($s)
 	{
 		if (is_null($s)) {
 			return true;
@@ -707,12 +716,33 @@ class StringUtility
 	 * @param string|null $s
 	 * @return boolean
 	 */
-	public static function isNullOrWhiteSpace(?string $s): bool
+	public static function isNullOrWhiteSpace($s)
 	{
 		if (self::isNullOrEmpty($s)) {
 			return true;
 		}
+		/** @var string $s */
 		return strlen(trim($s)) === 0;
+	}
+	/**
+	 * 文字列長を取得。
+	 *
+	 * @param string $value
+	 * @return integer 文字数。
+	 */
+	public static function getLength($value)
+	{
+		return mb_strlen($value);
+	}
+	/**
+	 * 文字列バイト数を取得。
+	 *
+	 * @param string $value 対象文字列。
+	 * @return integer バイト数。
+	 */
+	public static function getByteCount($value)
+	{
+		return strlen($value);
 	}
 	/**
 	 * プレースホルダー文字列置き換え処理
@@ -723,12 +753,12 @@ class StringUtility
 	 * @param string $tail
 	 * @return string 置き換え後文字列
 	 */
-	public static function replaceMap(string $source, array $map, string $head = '{', string $tail = '}'): string
+	public static function replaceMap($source, $map, $head = '{', $tail = '}')
 	{
 		$escHead = preg_quote($head);
 		$escTail = preg_quote($tail);
 		$pattern = "/$escHead(.+?)$escTail/";
-		return preg_replace_callback(
+		$result = preg_replace_callback(
 			$pattern,
 			function ($matches) use ($map) {
 				if (isset($map[$matches[1]])) {
@@ -738,8 +768,44 @@ class StringUtility
 			},
 			$source
 		);
+		if (is_null($result)) {
+			throw new CoreException();
+		}
+		return $result;
 	}
-	public static function startsWith(string $haystack, string $needle, bool $ignoreCase): bool
+	/**
+	 * 文字列位置を取得。
+	 *
+	 * @param string $haystack 対象文字列。
+	 * @param string $needle 検索文字列。
+	 * @param integer $offset 開始文字数目。負数の場合は後ろから。
+	 * @return integer 見つかった文字位置。見つかんない場合は -1
+	 */
+	public static function getPosition($haystack, $needle, $offset = 0)
+	{
+		$result =  mb_strpos($haystack, $needle, $offset);
+		if ($result === false) {
+			return -1;
+		}
+		return $result;
+	}
+	public static function getLastPosition($haystack, $needle, $offset = 0)
+	{
+		$result =  mb_strrpos($haystack, $needle, $offset);
+		if ($result === false) {
+			return -1;
+		}
+		return $result;
+	}
+	/**
+	 * 先頭文字列一致判定。
+	 *
+	 * @param string $haystack 対象文字列。
+	 * @param string $needle 検索文字列。
+	 * @param boolean $ignoreCase 大文字小文字を無視するか。
+	 * @return boolean
+	 */
+	public static function startsWith($haystack, $needle, $ignoreCase)
 	{
 		//PHP8
 		//str_starts_with($haystack, $needle);
@@ -755,7 +821,15 @@ class StringUtility
 		}
 		return $needle === $word;
 	}
-	public static function endsWith(string $haystack, string $needle, bool $ignoreCase): bool
+	/**
+	 * 終端文字列一致判定。
+	 *
+	 * @param string $haystack 対象文字列。
+	 * @param string $needle 検索文字列。
+	 * @param boolean $ignoreCase 大文字小文字を無視するか。
+	 * @return boolean
+	 */
+	public static function endsWith($haystack, $needle, $ignoreCase)
 	{
 		//PHP8
 		//str_ends_with($haystack, $needle);
@@ -765,13 +839,21 @@ class StringUtility
 		if (strlen($haystack) < strlen($needle)) {
 			return false;
 		}
-		$word = mb_substr($haystack, mb_strlen($haystack) - mb_strlen($needle));
+		$word = mb_substr($haystack, -mb_strlen($needle));
 		if ($ignoreCase) {
 			return !strcasecmp($needle, $word);
 		}
 		return $needle === $word;
 	}
-	public static function contains(string $haystack, string $needle, bool $ignoreCase): bool
+	/**
+	 * 文字列を含んでいるか判定。
+	 *
+	 * @param string $haystack 対象文字列。
+	 * @param string $needle 検索文字列。
+	 * @param boolean $ignoreCase 大文字小文字を無視するか。
+	 * @return boolean
+	 */
+	public static function contains($haystack, $needle, $ignoreCase)
 	{
 		//PHP8
 		//str_contains
@@ -786,8 +868,123 @@ class StringUtility
 		}
 		return strpos($haystack, $needle) !== false;
 	}
+	/**
+	 * 文字列部分切り出し。
+	 *
+	 * @param string $value 対象文字列。
+	 * @param integer $offset 開始文字数目。負数の場合は後ろから。
+	 * @param integer $length 抜き出す長さ。負数の場合は最後まで($offset)
+	 * @return string 切り抜き後文字列。
+	 */
+	public static function substring($value, $offset, $length = -1)
+	{
+		return mb_substr($value, $offset, 0 <= $length ? $length : null);
+	}
+	/**
+	 * 小文字を大文字に変換。
+	 *
+	 * @param string $value
+	 * @return string
+	 */
+	public static function toLower($value)
+	{
+		return mb_strtolower($value);
+	}
+	/**
+	 * 大文字を小文字に変換。
+	 *
+	 * @param string $value
+	 * @return string
+	 */
+	public static function toUpper($value)
+	{
+		return mb_strtoupper($value);
+	}
+	/**
+	 * 文字列分割。
+	 *
+	 * @param string $value 対象文字列。
+	 * @param string $separator 分割対象文字列。
+	 * @param integer $limit 分割数。
+	 * @return string[] 分割された文字列。
+	 * @throws ArgumentException 分割失敗(PHP8未満)
+	 * @throws \ValueError 分割失敗(PHP8以上)
+	 * @see https://www.php.net/manual/ja/function.explode.php
+	 */
+	public static function split($value, $separator, $limit = PHP_INT_MAX)
+	{
+		if (StringUtility::isNullOrEmpty($separator)) {
+			throw new ArgumentException();
+		}
+		/** non-empty-string $separator */
+		$result = explode($separator, $value, $limit); // @phpstan-ignore-line
+		return $result;
+	}
+	/**
+	 * 文字列結合。
+	 *
+	 * @param string[] $values
+	 * @param string $separator
+	 * @return string
+	 * @see https://www.php.net/manual/ja/function.implode.php
+	 */
+	public static function join($values, $separator)
+	{
+		return implode($separator, $values);
+	}
+	/**
+	 * トリム処理。
+	 *
+	 * @param string $value 対象文字列。
+	 * @param string $characters トリム対象文字。
+	 * @return string トリム後文字列。
+	 * @see https://www.php.net/manual/ja/function.trim.php
+	 */
+	public static function trim($value, $characters = self::TRIM_CHARACTERS)
+	{
+		return \trim($value, $characters);
+	}
+	/**
+	 * 左トリム。
+	 *
+	 * @param string $value 対象文字列。
+	 * @param string $characters トリム対象文字。
+	 * @return string トリム後文字列。
+	 */
+	public static function trimStart($value, $characters = self::TRIM_CHARACTERS)
+	{
+		return ltrim($value, $characters);
+	}
+	/**
+	 * 右トリム。
+	 *
+	 * @param string $value 対象文字列。
+	 * @param string $characters トリム対象文字。
+	 * @return string トリム後文字列。
+	 */
+	public static function trimEnd($value, $characters = self::TRIM_CHARACTERS)
+	{
+		return rtrim($value, $characters);
+	}
+	/**
+	 * データ出力。
+	 *
+	 * var_export/print_r で迷ったり $return = true 忘れのためのラッパー。
+	 *
+	 * @param mixed $value
+	 * @return string
+	 */
+	public static function dump($value)
+	{
+		//return var_export($value, true) ?? '';
+		return print_r($value, true);
+	}
+	public static function replace($value, $oldValue, $newValue)
+	{
+		return str_replace($oldValue, $newValue ?? '', $value);
+	}
 }
-class FileUtility
+abstract class FileUtility
 {
 	/**
 	 * 絶対パスへ変換。
@@ -795,7 +992,7 @@ class FileUtility
 	 * @param string $path パス。
 	 * @return string 絶対パス。
 	 */
-	public static function toCanonicalize(string $path): string
+	public static function toCanonicalize($path)
 	{
 		$targetPath = str_replace(['/', '\\'], DIRECTORY_SEPARATOR, $path);
 		$parts = array_filter(explode(DIRECTORY_SEPARATOR, $targetPath), 'mb_strlen');
@@ -823,35 +1020,128 @@ class FileUtility
 	 * @param string ...$addPaths 連結していくパス。
 	 * @return string 結合後のパス。正規化される。
 	 */
-	public static function joinPath(string $basePath, string ...$addPaths): string
+	public static function joinPath($basePath, string ...$addPaths)
 	{
-		$paths = array_merge([$basePath], array_map(function ($s) {
+$paths = array_merge([$basePath], array_map(function ($s) {
 			return trim($s, '/\\');
 		}, $addPaths));
-		$paths = array_filter($paths, function ($v, $k) {
+$paths = array_filter($paths, function ($v,$k) {
 			return !StringUtility::isNullOrEmpty($v) && ($k === 0 ? true :  $v !== '/' && $v !== '\\');
 		}, ARRAY_FILTER_USE_BOTH);
 		$joinedPath = implode(DIRECTORY_SEPARATOR, $paths);
 		return self::toCanonicalize($joinedPath);
 	}
-	/**
-	 * JSONとしてファイル読み込み
-	 *
-	 * @param string $path パス
-	 * @param boolean $associative 連想配列として扱うか
-	 * @return array|\stdClass 応答JSON
-	 */
-	public static function readJsonFile(string $path, bool $associative = true) // @phpstan-ignore-line
+	public static function getDirectoryPath($path)
 	{
-		$content = file_get_contents($path);
-		if ($content === false) {
-			throw new FileNotFoundException($path);
+		return dirname($path);
+	}
+	/**
+	 * ファイル名を取得。
+	 *
+	 * @param string $path
+	 * @return string
+	 */
+	public static function getFileName($path)
+	{
+		return basename($path);
+	}
+	public static function getFileExtension($path, $withDot = false)
+	{
+		if (StringUtility::isNullOrWhiteSpace($path)) {
+			return '';
 		}
-		$json = json_decode($content, $associative);
+		$dotIndex = StringUtility::getLastPosition($path, '.');
+		if ($dotIndex === -1) {
+			return '';
+		}
+		$result = StringUtility::substring($path, $dotIndex);
+		if ($withDot) {
+			return $result;
+		}
+		if (!StringUtility::getByteCount($result)) {
+			return '';
+		}
+		return StringUtility::substring($result, 1);
+	}
+	public static function getFileNameWithoutExtension($path)
+	{
+		$fileName = self::getFileName($path);
+		$dotIndex = StringUtility::getLastPosition($fileName, '.');
+		if ($dotIndex === -1) {
+			return $fileName;
+		}
+		return StringUtility::substring($fileName, 0, $dotIndex);
+	}
+	public static function getFileSize($path)
+	{
+		$result = filesize($path);
+		if ($result === false) {
+			throw new IOException();
+		}
+		return $result;
+	}
+	public static function readContent($path)
+	{
+		/** @var string|false */
+		$content = false;
+		try {
+			$content = file_get_contents($path);
+		} catch (Exception $ex) {
+			throw new IOException($ex->getMessage(), $ex->getCode(), $ex);
+		}
+		if ($content === false) {
+			throw new IOException($path);
+		}
+		return new Bytes($content);
+	}
+	private static function saveContent($path, $data, $append)
+	{
+		$flag = $append ? FILE_APPEND : 0;
+		$length = file_put_contents($path, $data, LOCK_EX | $flag);
+		if ($length === false) {
+			throw new IOException($path);
+		}
+	}
+	public static function writeContent($path, $data)
+	{
+		self::saveContent($path, $data, false);
+	}
+	public static function appendContent($path, $data)
+	{
+		self::saveContent($path, $data, true);
+	}
+	/**
+	 * JSONとしてファイル読み込み。
+	 *
+	 * @param string $path パス。
+	 * @param boolean $associative 連想配列として扱うか。
+	 * @return array<mixed>|\stdClass 応答JSON。
+	 * @throws IOException
+	 * @throws ParseException パース失敗。
+	 */
+	public static function readJsonFile($path, $associative = true)
+	{
+		$content = self::readContent($path);
+		$json = json_decode($content->getRaw(), $associative);
 		if (is_null($json)) {
 			throw new ParseException($path);
 		}
 		return $json;
+	}
+	/**
+	 * JSONファイルとして出力。
+	 *
+	 * @param string $path
+	 * @param array<mixed>|stdClass $data
+	 * @return void
+	 */
+	public static function writeJsonFile($path, $data)
+	{
+		$json = json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
+		if ($json === false) {
+			throw new ParseException($path);
+		}
+		self::saveContent($path, $json, false);
 	}
 	/**
 	 * ディレクトリが存在しない場合に作成する。
@@ -861,7 +1151,7 @@ class FileUtility
 	 * @param string $directoryPath ディレクトリパス
 	 * @return void
 	 */
-	public static function createDirectoryIfNotExists(string $directoryPath)
+	public static function createDirectoryIfNotExists($directoryPath)
 	{
 		if (!file_exists($directoryPath)) {
 			mkdir($directoryPath, 0777, true);
@@ -875,7 +1165,7 @@ class FileUtility
 	 * @param string $path 対象パス（メソッド自体はファイルパスとして使用することを前提としている）
 	 * @return void
 	 */
-	public static function createParentDirectoryIfNotExists(string $path)
+	public static function createParentDirectoryIfNotExists($path)
 	{
 		self::createDirectoryIfNotExists(dirname($path));
 	}
@@ -888,7 +1178,7 @@ class FileUtility
 	 * @param boolean $file
 	 * @return string[] ファイル一覧。
 	 */
-	private static function getChildrenCore(string $directoryPath, bool $directory, bool $file, bool $recursive): array
+	private static function getChildrenCore($directoryPath, $directory, $file, $recursive)
 	{
 		/** @var string[] */
 		$files = [];
@@ -920,7 +1210,7 @@ class FileUtility
 	 * @param boolean $recursive 再帰的に取得するか。
 	 * @return string[] ファイル一覧。
 	 */
-	public static function getChildren(string $directoryPath, bool $recursive): array
+	public static function getChildren($directoryPath, $recursive)
 	{
 		return self::getChildrenCore($directoryPath, true, true, $recursive);
 	}
@@ -931,7 +1221,7 @@ class FileUtility
 	 * @param boolean $recursive 再帰的に取得するか。
 	 * @return string[] ファイル一覧。
 	 */
-	public static function getFiles(string $directoryPath, bool $recursive): array
+	public static function getFiles($directoryPath, $recursive)
 	{
 		return self::getChildrenCore($directoryPath, false, true, $recursive);
 	}
@@ -942,7 +1232,7 @@ class FileUtility
 	 * @param boolean $recursive 再帰的に取得するか。
 	 * @return string[] ファイル一覧。
 	 */
-	public static function getDirectories(string $directoryPath, bool $recursive): array
+	public static function getDirectories($directoryPath, $recursive)
 	{
 		return self::getChildrenCore($directoryPath, true, false, $recursive);
 	}
@@ -953,7 +1243,7 @@ class FileUtility
 	 * @param string $directoryPath 削除ディレクトリ。
 	 * @return void
 	 */
-	public static function removeDirectory(string $directoryPath): void
+	public static function removeDirectory($directoryPath)
 	{
 		$files = self::getChildren($directoryPath, false);
 		foreach ($files as $file) {
@@ -971,7 +1261,7 @@ class FileUtility
 	 * @param string $directoryPath 対象ディレクトリ。
 	 * @return void
 	 */
-	public static function cleanupDirectory(string $directoryPath): void
+	public static function cleanupDirectory($directoryPath)
 	{
 		if (is_dir($directoryPath)) {
 			self::removeDirectory($directoryPath);
@@ -987,8 +1277,8 @@ class FileUtility
 	 * @param string $baseDirectoryPath 対象ディレクトリ。
 	 * @param string[] $targetPaths 対象ディレクトリ。
 	 *
-	*/
-	public static function backupItems(string $backupItem, string $baseDirectoryPath, array $targetPaths): void
+	 */
+	public static function backupItems($backupItem, $baseDirectoryPath, $targetPaths)
 	{
 		// NONE
 	}

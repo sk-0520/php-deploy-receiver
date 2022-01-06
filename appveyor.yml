@@ -3,7 +3,7 @@ image: Ubuntu2004
 skip_tags: true
 environment:
   matrix:
-    # - PHP_VER: 7.0
+    #- PHP_VER: 7.0
     - PHP_VER: 7.1
     - PHP_VER: 7.2
     - PHP_VER: 7.3
